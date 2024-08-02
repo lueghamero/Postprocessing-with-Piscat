@@ -7,6 +7,8 @@ import sys
 import pylab
 from piscat.InputOutput import reading_videos
 from piscat.Preproccessing import Normalization
+from piscat.BackgroundCorrection import NoiseFloor
+from piscat.BackgroundCorrection import DifferentialRollingAverage
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
 import cv2
@@ -23,52 +25,52 @@ filename_measurement = os.path.splitext(os.path.basename(filename))[0]
 video_data = np.load(filename)
 #video_data = np.transpose(video_data, (1, 2, 0))
 
-# Global variable to store the ROI
-roi = None
+# Ensure the pixel values are within the correct range
+if video_data.dtype != np.uint8 or video_data.min() < 0 or video_data.max() > 255:
+    # Normalize the pixel values to the range 0-255 and convert to uint8
+    video_data = ((video_data - video_data.min()) / (video_data.max() - video_data.min()) * 255).astype(np.uint8)
 
-# Function to handle ROI selection
-def onselect(eclick, erelease):
-    global roi
-    x1, y1 = int(eclick.xdata), int(eclick.ydata)
-    x2, y2 = int(erelease.xdata), int(erelease.ydata)
-    roi = (min(x1, x2), min(y1, y2), abs(x2 - x1), abs(y2 - y1))
-    plt.close()
+video_pn, power_fluctuation = Normalization(video=video_data).power_normalized()
 
-# Choose a frame to display (e.g., the 10th frame)
-frame_index = 10
-frame = video_data[frame_index]
+l_range = list(range(30, 300, 30))
+noise_floor_DRA_pn = NoiseFloor(video_pn, list_range=l_range)
 
-# Display the frame and select ROI
-fig, ax = plt.subplots()
-ax.imshow(frame, cmap='gray')
-ax.set_title("Select ROI and close the window")
-rect_selector = RectangleSelector(ax, onselect, 
-                                   button=[1], minspanx=5, minspany=5, 
-                                   spancoords='pixels', interactive=True)
-plt.show()
+min_value = min(noise_floor_DRA_pn.mean)
+min_index = noise_floor_DRA_pn.mean.index(min_value)
+opt_batch = l_range[min_index]
 
-# Validate the ROI
-if roi is None:
-    raise ValueError("ROI must be selected before cropping.")
+def DifferentialAvg(video, batch_size):
+    video_dr = DifferentialRollingAverage(video=video, batchSize=batch_size, mode_FPN='mFPN')
+    video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+    return video_dra
 
-x, y, w, h = roi
-crop_size = (w, h)
+processed_vid = DifferentialAvg(video_pn, opt_batch)
 
-# Create an array to store cropped frames
-num_frames = video_data.shape[0]
-cropped_video_data = np.zeros((num_frames, h, w), dtype=video_data.dtype)
+# Print the shape of the array to understand its structure
+print("Shape of the video data:", processed_vid.shape)
 
-# Crop each frame
+# Number of frames
+num_frames = processed_vid.shape[0]
+print("Number of frames in the video:", num_frames)
+
+# Iterate over each frame and display it
 for frame_index in range(num_frames):
-    frame = video_data[frame_index]
-    cropped_frame = frame[y:y+h, x:x+w]
-    cropped_video_data[frame_index] = cropped_frame
+    frame = processed_vid[frame_index]
+    
+    # Check if the frame is grayscale or color
+    if frame.ndim == 2:  # Grayscale
+        cv2.imshow('Video', frame)
+    elif frame.ndim == 3:  # Color
+        cv2.imshow('Video', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+    else:
+        raise ValueError(f"Unexpected frame dimensions: {frame.shape}")
 
-# Save the cropped video to a .npy file
-cropped_video_path = filename_folder
-np.save(cropped_video_path, cropped_video_data)
-print(f"Cropped video saved to {cropped_video_path}")
+    # Wait for 25 ms between frames (40 FPS)
+    if cv2.waitKey(20) & 0xFF == ord('q'):
+        break
 
+# Release the video window
+cv2.destroyAllWindows()
 
 
 
