@@ -34,41 +34,37 @@ def Remove_Status_Line(video):
 
 def PowerNormalized(video):
     video_pn, power_fluctuation = Normalization(video).power_normalized()
-    return video_pn
+    # Plotting the power fluctuations 
+    fig, ax = plt.subplots()
+    # Plotting on the axes
+    ax.plot(power_fluctuation, 'b', linewidth=1, markersize=0.5)
+    ax.set_xlabel('Frame #', fontsize=18)
+    ax.set_ylabel(r"$p / \bar p - 1$", fontsize=18)
+    ax.set_title('Intensity fluctuations in the laser beam', fontsize=13)
+    ax.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+    # Return the normalized video and the figure
+    return video_pn, fig
 
 def DifferentialAvg(video, batch_size):
     video_dr = DifferentialRollingAverage(video=video_sl_pn, batchSize=batch_size, mode_FPN='mFPN')
     video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
     return video_dra
 
+def FindOptBatch(video_file,l_range): # Finding the perfect batch size 
+    frame_number = len(video_file)
+    noise_floor= NoiseFloor(video_file, list_range=l_range)
+    # Optimal value for the batch size
+    min_value = min(noise_floor.mean)
+    min_index = noise_floor.mean.index(min_value)
+    opt_batch = l_range[min_index]
+    return opt_batch
+
 
 video_sl = Remove_Status_Line(video_file) # Removing the status line
-video_sl_pn = PowerNormalized(video_sl) # Power Normalization
-video_sl_pn_dra = DifferentialAvg(video_sl_pn, 1) # Differential Average Rolling
+video_sl_pn, fig = PowerNormalized(video_sl)  # Power Normalization
 
-
-#Display(video_sl_pn_dra,time_delay=500) 
-
-# Finding the perfect batch size 
-frame_number= len(video_file)
-l_range = list(range(30, 200, 30))
-
-# Noise floor calculation with different batch sizes
-
-noise_floor_sl_pn_dra = NoiseFloor(video_sl_pn_dra, list_range=l_range)
-
-# Optimal value for the batch size
-min_value = min(noise_floor_sl_pn_dra.mean)
-min_index = noise_floor_sl_pn_dra.mean.index(min_value)
-opt_batch = l_range[min_index]
-print(opt_batch) 
-
-# plt.plot(l_range, noise_floor_sl_pn.mean, label='PN')
-""" plt.plot(l_range, noise_floor_sl_pn_dra.mean, label='PN+DRA')
-plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
-plt.xlabel("Batch size", fontsize=18)
-plt.ylabel("Noise floor", fontsize=18)
-plt.legend()
+# Show the plot if needed
 plt.show()
- """
+
+
 
