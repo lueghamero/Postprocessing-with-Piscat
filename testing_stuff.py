@@ -6,6 +6,7 @@ import os
 import sys
 import pylab
 from piscat.InputOutput import reading_videos
+from piscat.Visualization import * 
 from piscat.Preproccessing import Normalization
 from piscat.BackgroundCorrection import NoiseFloor
 from piscat.BackgroundCorrection import DifferentialRollingAverage
@@ -44,30 +45,14 @@ def DifferentialAvg(video, batch_size):
     video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
     return video_dra
 
-processed_vid = DifferentialAvg(video_pn, opt_batch)
+processed_vid = DifferentialAvg(video_pn, 10)
+
+Display(processed_vid,time_delay=500) 
 
 # Print the shape of the array to understand its structure
 print("Shape of the video data:", processed_vid.shape)
 
-# Number of frames
-num_frames = processed_vid.shape[0]
-print("Number of frames in the video:", num_frames)
 
-# Iterate over each frame and display it
-for frame_index in range(num_frames):
-    frame = processed_vid[frame_index]
-    
-    # Check if the frame is grayscale or color
-    if frame.ndim == 2:  # Grayscale
-        cv2.imshow('Video', frame)
-    elif frame.ndim == 3:  # Color
-        cv2.imshow('Video', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
-    else:
-        raise ValueError(f"Unexpected frame dimensions: {frame.shape}")
-
-    # Wait for 25 ms between frames (40 FPS)
-    if cv2.waitKey(20) & 0xFF == ord('q'):
-        break
 
 # Release the video window
 cv2.destroyAllWindows()
