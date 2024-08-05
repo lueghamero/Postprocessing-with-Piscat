@@ -45,3 +45,13 @@ class PiscatFunctions:
         min_index = noise_floor.mean.index(min_value)
         opt_batch = l_range[min_index]
         return opt_batch
+    
+    def DarkFrameCorrection(self, axis):
+        # axis = 'None': the mean dark count could also be a good measure of the global offset due to dark counts.
+        if axis == None:  
+            mean_dark_frame = np.mean(self.video)
+        # axis = 0 (along the column), 1 (along the row)
+        else :  
+            mean_dark_frame = np.mean(self.video, axis)
+        Darkframecorrected = np.subtract(self.video, mean_dark_frame)
+        return Darkframecorrected 
