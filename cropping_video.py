@@ -1,63 +1,61 @@
 import numpy as np
-import PySimpleGUI as sg
-import os
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
+import cv2
+import os
+import PySimpleGUI as sg
 
+class VideoCropper:
 
-filename = sg.popup_get_file('Filename to play')
+    def __init__(self, video_path):
+        self.video_path = video_path
+        self.video_data = np.load(video_path)
+        self.roi = None
 
-if filename is None:
-    exit()
-#My version of extracting folder in which data is stored and name of data:
-filename_folder = os.path.dirname(filename)
-filename_measurement = os.path.splitext(os.path.basename(filename))[0]
+    def select_roi(self, frame_index=10):
+        """
+        Display a frame to select ROI and store the selected ROI.
+        """
+        def onselect(eclick, erelease):
+            x1, y1 = int(eclick.xdata), int(eclick.ydata)
+            x2, y2 = int(erelease.xdata), int(erelease.ydata)
+            self.roi = (min(x1, x2), min(y1, y2), abs(x2 - x1), abs(y2 - y1))
+            plt.close()
 
-video_data = np.load(filename)
-#video_data = np.transpose(video_data, (1, 2, 0))
+        frame = self.video_data[frame_index]
+        fig, ax = plt.subplots()
+        ax.imshow(frame, cmap='gray')
+        rect_selector = RectangleSelector(ax, onselect, 
+                                          button=[1], minspanx=5, minspany=5, 
+                                          spancoords='pixels', interactive=True)
+        plt.title("Select ROI and close the window")
+        plt.show()
 
-# Global variable to store the ROI
-roi = None
+        if self.roi is None:
+            raise ValueError("ROI not selected.")
+    
+    def crop_video(self):
+        """
+        Crop the video based on the selected ROI.
+        """
+        if self.roi is None:
+            raise ValueError("ROI must be selected before cropping.")
 
-# Function to handle ROI selection
-def onselect(eclick, erelease):
-    global roi
-    x1, y1 = int(eclick.xdata), int(eclick.ydata)
-    x2, y2 = int(erelease.xdata), int(erelease.ydata)
-    roi = (min(x1, x2), min(y1, y2), abs(x2 - x1), abs(y2 - y1))
-    plt.close()
+        x, y, w, h = self.roi
+        num_frames = self.video_data.shape[0]
+        cropped_video_data = np.zeros((num_frames, h, w), dtype=self.video_data.dtype)
 
-# Choose a frame to display (e.g., the 10th frame)
-frame_index = 10
-frame = video_data[frame_index]
+        for frame_index in range(num_frames):
+            frame = self.video_data[frame_index]
+            cropped_frame = frame[y:y+h, x:x+w]
+            cropped_video_data[frame_index] = cropped_frame
+        
+        return cropped_video_data
 
-# Display the frame and select ROI
-fig, ax = plt.subplots()
-ax.imshow(frame, cmap='gray')
-ax.set_title("Select ROI and close the window")
-rect_selector = RectangleSelector(ax, onselect, 
-                                   button=[1], minspanx=5, minspany=5, 
-                                   spancoords='pixels', interactive=True)
-plt.show()
+    def save_cropped_video(self, cropped_video_data, output_path):
+        """
+        Save the cropped video data to a .npy file.
+        """
+        np.save(output_path, cropped_video_data)
+        print(f"Cropped video saved to {output_path}")
 
-# Validate the ROI
-if roi is None:
-    raise ValueError("ROI must be selected before cropping.")
-
-x, y, w, h = roi
-crop_size = (w, h)
-
-# Create an array to store cropped frames
-num_frames = video_data.shape[0]
-cropped_video_data = np.zeros((num_frames, h, w), dtype=video_data.dtype)
-
-# Crop each frame
-for frame_index in range(num_frames):
-    frame = video_data[frame_index]
-    cropped_frame = frame[y:y+h, x:x+w]
-    cropped_video_data[frame_index] = cropped_frame
-
-# Save the cropped video to a .npy file
-cropped_video_path = filename_folder
-np.save(cropped_video_path, cropped_video_data)
-print(f"Cropped video saved to {cropped_video_path}")
