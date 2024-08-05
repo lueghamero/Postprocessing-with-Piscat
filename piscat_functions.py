@@ -17,9 +17,10 @@ class PiscatFunctions:
         video_sl, status_information = status_.find_status_line()  # Removing the status line
         return video_sl
 
-    def PowerNormalized(self):
-
-        video_pn, power_fluctuation = Normalization(self.video).power_normalized() 
+    def PowerNormalized(self, video=None):
+        if video is None:
+            video = self.video
+        video_pn, power_fluctuation = Normalization(video).power_normalized() 
 
         # Plotting the power fluctuations 
         fig, ax = plt.subplots()
@@ -32,23 +33,29 @@ class PiscatFunctions:
         # Return the normalized video and the figure
         return video_pn, fig
     
-    def DifferentialAvg(self, batch_size, mode_FPN):
-        video_dr = DifferentialRollingAverage(video=self.video, batchSize=batch_size, mode_FPN=mode_FPN)
+    def DifferentialAvg(self, batch_size, mode_FPN, video=None,):
+        if video is None:
+            video = self.video
+        video_dr = DifferentialRollingAverage(video, batchSize=batch_size, mode_FPN=mode_FPN)
         video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
         return video_dra
     
-    def FindOptBatch(self, l_range): # Finding the perfect batch size 
-        frame_number = len(self.video)
-        noise_floor= NoiseFloor(self.video, list_range=l_range)
+    def FindOptBatch(self, l_range, video=None,): # Finding the perfect batch size 
+        frame_number = len(video)
+        if video is None:
+            video = self.video
+        noise_floor= NoiseFloor(video, list_range=l_range)
         # Optimal value for the batch size
         min_value = min(noise_floor.mean)
         min_index = noise_floor.mean.index(min_value)
         opt_batch = l_range[min_index]
         return opt_batch
     
-    def DarkFrameCorrection(self, axis):
+    def DarkFrameCorrection(self, video=None, axis=None):
+        if video is None:
+            video = self.video
         # axis = 'None': the mean dark count could also be a good measure of the global offset due to dark counts.
-        if axis == None:  
+        if axis is None:  
             mean_dark_frame = np.mean(self.video)
         # axis = 0 (along the column), 1 (along the row)
         else :  
