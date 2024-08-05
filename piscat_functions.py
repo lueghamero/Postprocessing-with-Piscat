@@ -32,8 +32,8 @@ class PiscatFunctions:
         # Return the normalized video and the figure
         return video_pn, fig
     
-    def DifferentialAvg(self, batch_size):
-        video_dr = DifferentialRollingAverage(video=self.video, batchSize=batch_size, mode_FPN='mFPN')
+    def DifferentialAvg(self, batch_size, mode_FPN):
+        video_dr = DifferentialRollingAverage(video=self.video, batchSize=batch_size, mode_FPN=mode_FPN)
         video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
         return video_dra
     

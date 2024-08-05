@@ -4,6 +4,7 @@ from piscat.Visualization import *
 from piscat.Preproccessing import * 
 from piscat.BackgroundCorrection import *
 from piscat.InputOutput import *
+from piscat.Localization import *
 import matplotlib.pyplot as plt
 
 from piscat_functions import PiscatFunctions
@@ -29,7 +30,13 @@ l_range = list(range(30, 200, 30))
 opt_batch = instance_video.FindOptBatch(l_range)
 
 # Differential Rolling Average
-dra_video = instance_video.DifferentialAvg(opt_batch)
-print(opt_batch)
-Display(dra_video, time_delay=500)
+mode_FPN='cpFPN'
+dra_video = instance_video.DifferentialAvg(opt_batch, mode_FPN)
+#print(opt_batch)
+#Display(dra_video, time_delay=500)
 
+PSF_1 = PSFsExtraction(video=dra_video)
+PSFs = PSF_1.psf_detection(function='dog',
+                            min_sigma=1.6, max_sigma=1.8, sigma_ratio=1.1, threshold=8e-4,
+                            overlap=0, mode='BOTH')
+DisplayDataFramePSFsLocalization(dra_video, PSFs, time_delay=0.1, GUI_progressbar=False)
