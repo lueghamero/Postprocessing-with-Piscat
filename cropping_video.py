@@ -12,10 +12,9 @@ class VideoCropper:
         self.video_data = np.load(video_path)
         self.roi = None
 
+
+    # Show the selected video and enable a rectangular selection for the section which one wants to crop out 
     def select_roi(self, frame_index=10):
-        """
-        Display a frame to select ROI and store the selected ROI.
-        """
         def onselect(eclick, erelease):
             x1, y1 = int(eclick.xdata), int(eclick.ydata)
             x2, y2 = int(erelease.xdata), int(erelease.ydata)
@@ -34,10 +33,9 @@ class VideoCropper:
         if self.roi is None:
             raise ValueError("ROI not selected.")
     
+
+    # Crop the selected section out of the video
     def crop_video(self):
-        """
-        Crop the video based on the selected ROI.
-        """
         if self.roi is None:
             raise ValueError("ROI must be selected before cropping.")
 
@@ -52,10 +50,37 @@ class VideoCropper:
         
         return cropped_video_data
 
-    def save_cropped_video(self, cropped_video_data, output_path):
-        """
-        Save the cropped video data to a .npy file.
-        """
+
+    # Generate output path, which is the same folder as the original video was saved in. The cropped
+    # video has the same name as the original, but with the surfix _cropped_number.
+    def generate_output_path(self):
+        base_name, ext = os.path.splitext(self.video_path)
+        dir_name = os.path.dirname(base_name)
+        file_name = os.path.basename(base_name)
+
+        # Find all files that match the pattern
+        existing_files = [f for f in os.listdir(dir_name) if f.startswith(file_name + "_cropped") and f.endswith(ext)]
+
+        # Extract the highest enumeration number
+        max_counter = 0
+        for f in existing_files:
+            try:
+                num_str = f.replace(file_name + "_cropped_", "").replace(ext, "")
+                num = int(num_str)
+                if num > max_counter:
+                    max_counter = num
+            except ValueError:
+                continue
+
+        # Generate the new file name
+        new_counter = max_counter + 1
+        new_path = os.path.join(dir_name, f"{file_name}_cropped_{new_counter}{ext}")
+        return new_path
+
+
+    # Save the cropped video
+    def save_cropped_video(self, cropped_video_data):
+        output_path = self.generate_output_path()
         np.save(output_path, cropped_video_data)
         print(f"Cropped video saved to {output_path}")
 
