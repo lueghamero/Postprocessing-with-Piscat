@@ -54,4 +54,5 @@ df_PSFs = PSF.psf_detection_preview(function='dog',
                             overlap=0, mode='BOTH', frame_number = frame_number)
 print(df_PSFs)
 
-DisplayDataFramePSFsLocalization(dra_video, df_PSFs, time_delay=0.1, GUI_progressbar=False)
+display_psf= DisplayDataFramePSFsLocalization(dra_video, df_PSFs, time_delay=0.1, GUI_progressbar=False)
+display_psf.run()
