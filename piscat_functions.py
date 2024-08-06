@@ -31,7 +31,7 @@ class PiscatFunctions:
         ax.set_title('Intensity fluctuations in the laser beam', fontsize=13)
         ax.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
         # Return the normalized video and the figure
-        return video_pn, fig
+        return video_pn #, fig
     
     def DifferentialAvg(self, batch_size, mode_FPN, video=None,):
         if video is None:
@@ -41,9 +41,9 @@ class PiscatFunctions:
         return video_dra
     
     def FindOptBatch(self, l_range, video=None,): # Finding the perfect batch size 
-        frame_number = len(video)
         if video is None:
             video = self.video
+        frame_number = len(video)
         noise_floor= NoiseFloor(video, list_range=l_range)
         # Optimal value for the batch size
         min_value = min(noise_floor.mean)
@@ -62,3 +62,4 @@ class PiscatFunctions:
             mean_dark_frame = np.mean(self.video, axis)
         Darkframecorrected = np.subtract(self.video, mean_dark_frame)
         return Darkframecorrected 
+    
