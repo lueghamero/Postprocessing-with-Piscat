@@ -1,156 +1,76 @@
-import PySimpleGUI as sg
 import numpy as np
-import os
-import sys
+import PySimpleGUI as sg
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from cropping_video import VideoCropper as vc
-from mpy_functions_new import *
+import os
+import tkinter as tk
 
-#%%##################--------INITIAL--------########################
+def draw_figure(canvas_elem, figure):
+    """Draw a Matplotlib figure on a Tkinter canvas."""
+    for widget in canvas_elem.Widget.winfo_children():
+        widget.destroy()
+    canvas = FigureCanvasTkAgg(figure, master=canvas_elem.Widget)
+    canvas.draw()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-full_path = None
+# Define the layout for the main GUI
+layout = [
+    [sg.Text('Select a .npy file to display video frames:')],
+    [sg.Input(key='-FILE-', enable_events=True), sg.FileBrowse(file_types=(('Numpy Files', '*.npy'),))],
+    [sg.Button('Load Video'), sg.Button('Exit')],
+    [sg.Canvas(key='-CANVAS-', size=(600, 600))],
+    [sg.Button('Play'), sg.Button('Stop'), sg.Button('Next Frame'), sg.Button('Previous Frame')]
+]
 
-avg      = 1
-view_opt = 'Differential'
-nmap_opt = 'Noise Map: None'
-blob_opt = 'Blob Dection Off'
-cb_min = -0.1/np.sqrt(avg)
-cb_max = 0.1/np.sqrt(avg)
-f_cb = 1
-i = 0
+# Create the window
+window = sg.Window('Video Player', layout, finalize=True)
 
-#create a folder for the config file, in which saves such as the filepath to the video is stored
-CONFIG_DIR = 'config'
-CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.txt')
+# Create a Matplotlib figure and axes
+fig, ax = plt.subplots()
+canvas_elem = window['-CANVAS-']
 
+video_data = None
+playing = False
 
-# Function to save the folder path to a config file
-def save_folder_path(folder_path):
-    with open(CONFIG_FILE, 'w') as file:
-        file.write(folder_path)
-
-
-# Function to load the folder path from a config file
-def load_folder_path():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'r') as file:
-            return file.read().strip()
-    return ''
-
-
-# Function to list files in a folder
-def list_files_in_folder(folder, show_only_npy=False):
-    try:
-        files = os.listdir(folder)
-        if show_only_npy:
-            files = [f for f in files if f.lower().endswith('.npy')]
-        return files
-    except FileNotFoundError:
-        return ["Folder not found."]
-    except NotADirectoryError:
-        return ["Selected path is not a folder."]
-    except PermissionError:
-        return ["Permission denied."]
-
-
-# Load the last selected folder path
-initial_folder = load_folder_path()
-initial_show_only_npy = True
-initial_file_list = list_files_in_folder(initial_folder, initial_show_only_npy) if initial_folder else []
-
-# Create a Canvas for the GUI
-def draw_figure(canvas, figure):
-    figure_canvas_agg = FigureCanvasTkAgg(figure, canvas)
-    figure_canvas_agg.draw()
-    figure_canvas_agg.get_tk_widget().pack(side='top', fill='both', expand=1)
-    return figure_canvas_agg
-
-
-#%%###################--------WINDOW_LAYOUT--------######################
-
-def window_layout():
-
-    vid_prep = [
-        [sg.Text("Please select a folder:")],
-        [sg.Input(key='-FOLDER-', enable_events=True, default_text=initial_folder), sg.FolderBrowse()],
-        [sg.Checkbox('Show only .npy files', key='-SHOW_NPY-', default=initial_show_only_npy, enable_events=True)],
-        [sg.Listbox(values=initial_file_list, size=(60, 10), key='-FILELIST-', enable_events=True, select_mode=sg.LISTBOX_SELECT_MODE_SINGLE)],
-        [sg.Button("Read File"), sg.Button("Cancel"), sg.Button("Crop seleceted Video"), sg.Button("Show selected Video")],
-        [sg.Canvas(key='-CANVAS-', size=(400, 400))]
-    ]
-
-    # Create the window
-    window = sg.Window('Folder and File Selector', vid_prep)
-    
-    return window
-
-window = window_layout()
-
-#%%#######################--------MAIN--------###########################
-
-# Event loop
 while True:
-
-    i=i+1
-    event, values = window.read()
-
-    if event == sg.WINDOW_CLOSED:
+    event, values = window.read(timeout=100)  # Adjust timeout for responsiveness
+    
+    if event == sg.WIN_CLOSED or event == 'Exit':
         break
+    
+    if event == 'Load Video':
+        # Load video data
+        filename = values['-FILE-']
+        if filename and os.path.isfile(filename):
+            video_data = np.load(filename)
+            vid_len = video_data.shape[0]
+            frame_index = 0
+            sg.popup(f'Loaded video with {vid_len} frames.')
+            playing = False  # Stop any playing video when a new one is loaded
 
-    if event == 'Cancel':
-        break
+    if video_data is not None:
+        # Update the frame
+        frame = video_data[frame_index, :, :]
+        ax.clear()
+        ax.imshow(frame, cmap='gray')
+        ax.set_title(f'Frame Number {frame_index + 1}')
+        ax.axis('off')
+        draw_figure(canvas_elem, fig)  # Draw the updated figure
 
-    if event == '-FOLDER-':
-        folder = values['-FOLDER-']
-        show_only_npy = values['-SHOW_NPY-']
-        file_list = list_files_in_folder(folder, show_only_npy)
-        window['-FILELIST-'].update(file_list)
-        save_folder_path(folder)  # Save the selected folder path
+        # Handle frame navigation
+        if event == 'Next Frame':
+            frame_index = (frame_index + 1) % vid_len  # Loop back to start if at end
+            playing = False  # Stop automatic play when manually navigating frames
+        elif event == 'Previous Frame':
+            frame_index = (frame_index - 1) % vid_len  # Loop back to end if at start
+            playing = False  # Stop automatic play when manually navigating frames
+        elif event == 'Play':
+            playing = True
+        elif event == 'Stop':
+            playing = False
 
-    elif event == '-SHOW_NPY-': # Only show .npy files
-        folder = values['-FOLDER-']
-        show_only_npy = values['-SHOW_NPY-']
-        if folder:
-            file_list = list_files_in_folder(folder, show_only_npy)
-            window['-FILELIST-'].update(file_list)
-
-    elif event == '-FILELIST-':
-        # Update selected file path, no need to change the listbox
-        pass
-
-    elif event == 'Read File':
-        folder = values['-FOLDER-']
-        selected_file = values['-FILELIST-'][0] if values['-FILELIST-'] else None
-        if selected_file:
-            full_path = os.path.join(folder, selected_file) # Read in the file
-        else:
-            sg.popup(f'File could not be loaded: {full_path}')
-
-    elif event == 'Show selected Video':
-        if 'full_path' in locals() and full_path:   
-            vidFile = load_npy(full_path)
-            vidFile = np.transpose(vidFile, (1, 2, 0))
-            vid = vid_norm(vidFile)
-            length_vid = np.shape(vid)[2]
-            disp = view_ini(vid, avg, i, view_opt, nmap_opt)
-
-        else:
-            sg.popup('Please load a video file first.')
-
-    elif event == 'Crop seleceted Video':
-        if 'full_path' in locals() and full_path:    
-            cropper = vc(full_path)
-            cropper.select_roi(frame_index=10)
-            cropped_video_data = cropper.crop_video()
-            cropper.save_cropped_video(cropped_video_data)
-        else:
-            sg.popup('Please load a video file first.')
+        # Automatically advance frames if playing
+        if playing:
+            frame_index = (frame_index + 1) % vid_len
 
 window.close()
-
-
-
-
-
-
-
