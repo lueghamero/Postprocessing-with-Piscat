@@ -62,4 +62,12 @@ class PiscatFunctions:
             mean_dark_frame = np.mean(self.video, axis)
         Darkframecorrected = np.subtract(self.video, mean_dark_frame)
         return Darkframecorrected 
-    
+    def RadialFiltering(self, rmin, rmax, video=None):
+        # After PN and DRA
+        if video is None:
+            video = self.video
+        rvt_ = RadialVarianceTransform(inter_flag_parallel_active=False)
+        filtered_video = rvt_.rvt_video(video, rmin, rmax, kind="basic", highpass_size=None,
+                                        upsample=1, rweights=None, coarse_factor=1, coarse_mode='add',
+                                        pad_mode='constant')
+        return filtered_video
