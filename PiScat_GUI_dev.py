@@ -53,6 +53,29 @@ def list_files_in_folder(folder, show_only_npy=False):
         return ["Selected path is not a folder."]
     except PermissionError:
         return ["Permission denied."]
+    
+def differential_view(video, frame_index, batchSize):
+    """
+    Basically the DRA function from piScat library, but modified
+    """
+    batch_1 = np.sum(video[0 : batchSize, :, :], axis=0)
+    batch_2 = np.sum(video[batchSize : 2 * batchSize, :, :], axis=0)
+
+    batch_1_ = np.divide(batch_1, batchSize)
+    batch_2_ = np.divide(batch_2, batchSize)
+
+    output_diff = batch_2_ - batch_1_
+
+    batch_1 = (batch_1 - video[frame_index - 1, :, :] + video[batchSize + frame_index - 1, :, :])
+    batch_2 = (batch_2 - video[batchSize + frame_index - 1, :, :]+ video[(2 * batchSize) + frame_index - 1, :, :]
+                )
+    batch_1_ = np.divide(batch_1, batchSize)
+    batch_2_ = np.divide(batch_2, batchSize)
+
+    output_diff = batch_2_ - batch_1_
+
+
+    return output_diff
 
 
 # Load the last selected folder path
@@ -72,7 +95,7 @@ def window_layout():
         [sg.Checkbox('Show only .npy files', key='-SHOW_NPY-', default=initial_show_only_npy, enable_events=True)],
         [sg.Listbox(values=initial_file_list, size=(60, 10), key='-FILELIST-', enable_events=True, select_mode=sg.LISTBOX_SELECT_MODE_SINGLE)],
         [sg.Button("Read File"), sg.Button("Crop seleceted Video"), sg.Button("Cancel")],
-        [sg.Button('Play'), sg.Button('Stop'), sg.Button('Next Frame'), sg.Button('Previous Frame')],
+        [sg.Button('Play'), sg.Button('Stop'), sg.Button('Next Frame'), sg.Button('Previous Frame'), sg.Checkbox("Differential View", key='-DIFF-', enable_events=True)],
         [sg.Canvas(key='-CANVAS-', size=(600, 600))]
         
     ]
@@ -135,7 +158,12 @@ while True:
 
     if video_data is not None:
         # Update the frame
-        frame = video_data[frame_index, :, :]
+        
+        if values['-DIFF-'] == True:
+            frame = differential_view(video_data, frame_index, batchSize=5)
+        else:
+            frame = video_data[frame_index, :, :]
+        
         ax.clear()
         ax.imshow(frame, cmap='gray')
         ax.set_title(f'Frame Number {frame_index + 1}')

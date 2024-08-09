@@ -5,72 +5,37 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import os
 import tkinter as tk
 
-def draw_figure(canvas_elem, figure):
-    """Draw a Matplotlib figure on a Tkinter canvas."""
-    for widget in canvas_elem.Widget.winfo_children():
-        widget.destroy()
-    canvas = FigureCanvasTkAgg(figure, master=canvas_elem.Widget)
-    canvas.draw()
-    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+filename = sg.popup_get_file('Filename to play')
 
-# Define the layout for the main GUI
-layout = [
-    [sg.Text('Select a .npy file to display video frames:')],
-    [sg.Input(key='-FILE-', enable_events=True), sg.FileBrowse(file_types=(('Numpy Files', '*.npy'),))],
-    [sg.Button('Load Video'), sg.Button('Exit')],
-    [sg.Canvas(key='-CANVAS-', size=(600, 600))],
-    [sg.Button('Play'), sg.Button('Stop'), sg.Button('Next Frame'), sg.Button('Previous Frame')]
-]
+video = np.load(filename)
 
-# Create the window
-window = sg.Window('Video Player', layout, finalize=True)
+batchSize = 1
+size_A_diff = (video.shape[0] - 2 * batchSize, video.shape[1], video.shape[2])
+output_batch_1 = np.empty(size_A_diff)
+output_diff = np.empty(size_A_diff)
 
-# Create a Matplotlib figure and axes
-fig, ax = plt.subplots()
-canvas_elem = window['-CANVAS-']
+batch_1 = np.sum(video[0 : batchSize, :, :], axis=0)
+batch_2 = np.sum(video[batchSize : 2 * batchSize, :, :], axis=0)
 
-video_data = None
-playing = False
+batch_1_ = np.divide(batch_1, batchSize)
+batch_2_ = np.divide(batch_2, batchSize)
 
-while True:
-    event, values = window.read(timeout=100)  # Adjust timeout for responsiveness
-    
-    if event == sg.WIN_CLOSED or event == 'Exit':
-        break
-    
-    if event == 'Load Video':
-        # Load video data
-        filename = values['-FILE-']
-        if filename and os.path.isfile(filename):
-            video_data = np.load(filename)
-            vid_len = video_data.shape[0]
-            frame_index = 0
-            sg.popup(f'Loaded video with {vid_len} frames.')
-            playing = False  # Stop any playing video when a new one is loaded
+output_diff[0, :, :] = batch_2_ - batch_1_
+output_batch_1[0, :, :] = batch_1_
 
-    if video_data is not None:
-        # Update the frame
-        frame = video_data[frame_index, :, :]
-        ax.clear()
-        ax.imshow(frame, cmap='gray')
-        ax.set_title(f'Frame Number {frame_index + 1}')
-        ax.axis('off')
-        draw_figure(canvas_elem, fig)  # Draw the updated figure
+for i_ in range(1, video.shape[0] - 2 * batchSize):
+    batch_1 = (batch_1 - video[i_ - 1, :, :] + video[batchSize + i_ - 1, :, :])
+    batch_2 = (
+            batch_2
+            - video[batchSize + i_ - 1, :, :]
+            + video[(2 * batchSize) + i_ - 1, :, :]
+            )
+    batch_1_ = np.divide(batch_1, batchSize)
+    batch_2_ = np.divide(batch_2, batchSize)
 
-        # Handle frame navigation
-        if event == 'Next Frame':
-            frame_index = (frame_index + 1) % vid_len  # Loop back to start if at end
-            playing = False  # Stop automatic play when manually navigating frames
-        elif event == 'Previous Frame':
-            frame_index = (frame_index - 1) % vid_len  # Loop back to end if at start
-            playing = False  # Stop automatic play when manually navigating frames
-        elif event == 'Play':
-            playing = True
-        elif event == 'Stop':
-            playing = False
+    output_diff[i_, :, :] = batch_2_ - batch_1_
+    output_batch_1[i_, :, :] = batch_1_
+    plt.imshow(output_diff[i_])
+    plt.show()
+    plt.close()
 
-        # Automatically advance frames if playing
-        if playing:
-            frame_index = (frame_index + 1) % vid_len
-
-window.close()
