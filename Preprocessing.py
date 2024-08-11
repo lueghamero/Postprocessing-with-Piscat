@@ -46,13 +46,15 @@ video_pn = instance_video.PowerNormalized()
 
 # choose between Fixed Pattern Noise Correction Methods: mFPN, cFPN, fFPN 
 mode_FPN='mFPN'
-video_pn_dra = instance_video.DifferentialAvg(15, mode_FPN, video= video_pn) 
+video_pn_dra = instance_video.DifferentialAvg(1, mode_FPN, video= video_pn) 
 
 # 5) Radial Variance Transform Filtering
 # video_pn_dra_rf = instance_video.RadialFiltering(rmin=4, rmax=8, video= video_pn_dra )
 
-Display(video_pn_dra, time_delay=200)
+# Display(video_pn_dra, time_delay=200)
 
-save_path = '/Users/ipeks/Desktop/DNA_PAINT_ISCAT/iScatData/DRAd_GNPs.npy'
-np.save(save_path, video_pn_dra)
+#save_path = '/Users/ipeks/Desktop/DNA_PAINT_ISCAT/iScatData/DRAd_GNPs.npy'
+# np.save(save_path, video_pn_dra)
 
+print(video_pn_dra)
+print(video_pn_dra.shape)
