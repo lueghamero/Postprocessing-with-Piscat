@@ -94,19 +94,43 @@ def window_layout():
         [sg.Input(key='-FOLDER-', enable_events=True, default_text=initial_folder), sg.FolderBrowse()],
         [sg.Checkbox('Show only .npy files', key='-SHOW_NPY-', default=initial_show_only_npy, enable_events=True)],
         [sg.Listbox(values=initial_file_list, size=(60, 10), key='-FILELIST-', enable_events=True, select_mode=sg.LISTBOX_SELECT_MODE_SINGLE)],
-        [sg.Button("Read File"), sg.Button("Crop seleceted Video"), sg.Button("Cancel")],
-        [sg.Button('Play'), sg.Button('Stop'), sg.Button('Next Frame'), sg.Button('Previous Frame'), sg.Checkbox("Differential View", key='-DIFF-', enable_events=True)],
-        [sg.Canvas(key='-CANVAS-', size=(600, 600))]
+        [sg.Button("Read File"), sg.Button("Crop seleceted Video"), sg.Button("Cancel")]
+    ]
+
+
+    vid_play = [
+        [sg.Button('Play'), sg.Button('Stop'), sg.Button('Previous Frame'), sg.Button('Next Frame'), 
+         sg.Checkbox("Differential View", key='-DIFF-', enable_events=True), sg.Text('Batch Size', size=(10,1)), 
+         sg.Slider((1, 50), size=(10,5), default_value=1, key='-BATCH-', orientation='horizontal', enable_events=True)],
+        [sg.Canvas(key='-CANVAS-',pad=(0,0), size=(500, 500))]
+    ]
         
+    vid_layout = [
+        [sg.Frame("Video Selection", vid_prep, expand_x=True, expand_y=True)],
+        [sg.HorizontalLine()],
+        [sg.Frame("Video Preview", vid_play)]
+    ]
+
+    piscat_prep = \
+    [
+        [sg.Canvas(size=(500,500))]
+    ]
+
+    piscat_layout =     [
+        [sg.Frame("PiScat", piscat_prep)]
+    ]
+
+    layout = [
+        [sg.Column(vid_layout, expand_x=False, expand_y=False),sg.VerticalSeparator(),sg.Column(piscat_layout)]
     ]
 
     # Create the window
-    window = sg.Window('Folder and File Selector', vid_prep, finalize=True)
+    window = sg.Window('iScat Postprocessing using PiScat', layout, size = (1600,900), resizable=True, finalize=True)
     
     return window
 
 window = window_layout()
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(1,1,constrained_layout=True, figsize=(2.6,2.6))
 canvas_elem = window['-CANVAS-']
 
 #%%#######################--------MAIN--------###########################
@@ -116,7 +140,8 @@ playing = False
 # Event loop
 while True:
 
-    event, values = window.read(timeout=10)
+    event, values = window.read(timeout=5)
+    batchSize = int(values['-BATCH-'])
 
     if event == sg.WINDOW_CLOSED:
         break
@@ -151,7 +176,7 @@ while True:
                 video_data = np.load(full_path)
                 vid_len = video_data.shape[0]
                 frame_index = 0
-                sg.popup(f'Loaded video with {vid_len} frames.')
+                sg.popup(f'Loaded video has {vid_len} frames.')
                 playing = False   
         else:
             sg.popup(f'File could not be loaded: {full_path}')
@@ -160,7 +185,7 @@ while True:
         # Update the frame
         
         if values['-DIFF-'] == True:
-            frame = differential_view(video_data, frame_index, batchSize=5)
+            frame = differential_view(video_data, frame_index, batchSize)
         else:
             frame = video_data[frame_index, :, :]
         
