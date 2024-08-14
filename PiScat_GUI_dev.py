@@ -8,6 +8,10 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from cropping_video import VideoCropper as vc
 import tkinter as tk
 
+from piscat.Visualization import * 
+from piscat.Preproccessing import *
+from piscat.BackgroundCorrection import *
+from piscat.InputOutput import *
 
 #%%##################--------INITIAL--------########################
 
@@ -57,7 +61,7 @@ def list_files_in_folder(folder, show_only_npy=False):
     except PermissionError:
         return ["Permission denied."]
 
-
+# Function for the differential view with adjustable batch sizes
 def differential_view(video, frame_index, batchSize):
     """
     Basically the DRA function from piScat library, but modified
@@ -133,7 +137,10 @@ def window_layout():
     ]
 
     piscat_preprocessing = [
-        [sg.Canvas(size=(150,500))]
+            [sg.Checkbox("Power Normalisation", key='-PN-', enable_events=True)],
+            [sg.Checkbox("Darkframe Correction", key='-DFC-', enable_events=True)],
+            [sg.Button('Preprocess Video'),sg.Button('Show Preprocessed Video')],
+            [sg.Canvas(key='-PNCANV-', pad=(0,0), size=(1000,500))]    
     ]
 
     piscat_DRA = [
@@ -173,7 +180,9 @@ if initial_file2:
 
 #initialize the figures for the canvas inside the GUI
 fig, ax = plt.subplots(1,1,constrained_layout=True, figsize=(2.5,2.5))
+fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(5,2.5))
 canvas_elem = window['-CANVAS-']
+canvas_elem_pn = window['-PNCANV-']
 
 #%%#######################--------MAIN--------###########################
 video_data = None
@@ -222,7 +231,7 @@ while True:
                 vid_len = video_data.shape[0]
                 frame_index = 0
                 print(f'Loaded video has {vid_len} frames.')
-                playing = False   
+                playing = False  
         else:
             print(f'File could not be loaded: {full_path}')
     
@@ -237,11 +246,9 @@ while True:
         else:
             print(f'File could not be loaded: {full_path_dark}')
     
-
-
     if video_data is not None:
         # Update the frame
-        
+
         if event == '-RESET-':
             frame_index = 0
 
@@ -272,6 +279,49 @@ while True:
         if playing:
             frame_index = (frame_index + 1) % vid_len
 
+        
+
+        # Preprocessing
+        if event == 'Preprocess Video':
+
+            if values['-DFC-'] == True:
+                mean_dark_frame = np.mean(dark_frame_video)
+                video_dfc = np.subtract(video_data, mean_dark_frame)
+                print(video_dfc)
+                if values['-PN-'] == True:
+                    video_pn, power_fluctuation = Normalization(video_dfc).power_normalized()
+                    ax2[0].clear()
+                    ax2[0].plot(power_fluctuation, 'b', linewidth=1, markersize=0.3)
+                    ax2[0].set_xlabel('Frame #', fontsize=8)
+                    ax2[0].set_ylabel(r"$p / \bar p - 1$", fontsize=8)
+                    ax2[0].set_title('Intensity fluctuations in the laser beam', fontsize=8)
+                    ax2[0].ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+                    frame_pn = video_pn[1, :, :]
+                    ax2[1].clear()
+                    ax2[1].set_xlabel(f'Frame Number {frame_index + 1}', fontsize=8)
+                    ax2[1].imshow(frame_pn, cmap='gray')
+                    ax2[1].set_title('Preprocessed Video', fontsize=8)
+                    ax2[1].axis('off')
+                    draw_figure(canvas_elem_pn, fig2)
+
+            elif values['-DFC-'] == False:            
+                if values['-PN-'] == True:
+                    video_pn, power_fluctuation = Normalization(video_data).power_normalized()
+                    ax2[0].clear()
+                    ax2[0].plot(power_fluctuation, 'b', linewidth=1, markersize=0.3)
+                    ax2[0].set_xlabel('Frame #', fontsize=8)
+                    ax2[0].set_ylabel(r"$p / \bar p - 1$", fontsize=8)
+                    ax2[0].set_title('Intensity fluctuations in the laser beam', fontsize=8)
+                    ax2[0].ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+                    frame_pn = video_pn[1, :, :]
+                    ax2[1].clear()
+                    ax2[1].set_xlabel(f'Frame Number {frame_index + 1}', fontsize=8)
+                    ax2[1].imshow(frame_pn, cmap='gray')
+                    ax2[1].set_title('Preprocessed Video', fontsize=8)
+                    draw_figure(canvas_elem_pn, fig2)
+
+
+
     elif event == 'Crop seleceted Video':
         if 'full_path' in locals() and full_path:    
             cropper = vc(full_path)
@@ -280,6 +330,8 @@ while True:
             cropper.save_cropped_video(cropped_video_data)
         else:
             sg.popup('Please load a video file first.')
+
+
 
 window.close()
 

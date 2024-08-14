@@ -9,8 +9,9 @@ import matplotlib.pyplot as plt
 
 class PiscatFunctions: 
     
-    def __init__(self, video):
+    def __init__(self, video, df_video):
         self.video = video
+        self.df_video = df_video
 
     def Remove_Status_Line(self):
         status_ = read_status_line.StatusLine(self.video)  # Reading the status line
@@ -31,7 +32,7 @@ class PiscatFunctions:
         ax.set_title('Intensity fluctuations in the laser beam', fontsize=13)
         ax.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
         # Return the normalized video and the figure
-        return video_pn #, fig
+        return video_pn, fig
     
     def DifferentialAvg(self, batch_size, mode_FPN, video=None,):
         if video is None:
@@ -51,15 +52,17 @@ class PiscatFunctions:
         opt_batch = l_range[min_index]
         return opt_batch
     
-    def DarkFrameCorrection(self, video=None, axis=None):
+    def DarkFrameCorrection(self, video=None, df_video=None, axis=None):
         if video is None:
             video = self.video
+        if df_video is None:
+            df_video = self.df_video
         # axis = 'None': the mean dark count could also be a good measure of the global offset due to dark counts.
         if axis is None:  
-            mean_dark_frame = np.mean(self.video)
+            mean_dark_frame = np.mean(self.df_video)
         # axis = 0 (along the column), 1 (along the row)
         else :  
-            mean_dark_frame = np.mean(self.video, axis)
+            mean_dark_frame = np.mean(self.df_video, axis)
         Darkframecorrected = np.subtract(self.video, mean_dark_frame)
         return Darkframecorrected 
     def RadialFiltering(self, rmin, rmax, video=None):
