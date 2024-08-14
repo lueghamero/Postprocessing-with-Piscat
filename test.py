@@ -1,41 +1,60 @@
-import numpy as np
 import PySimpleGUI as sg
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import os
-import tkinter as tk
+import sys
+import time
+import threading
+from io import StringIO
 
-filename = sg.popup_get_file('Filename to play')
+# Redirect stdout and stderr
+class OutputRedirector:
+    def __init__(self, window, key):
+        self.window = window
+        self.key = key
 
-video = np.load(filename)
+    def write(self, message):
+        self.window.write_event_value(self.key, message)
 
-batchSize = 1
-size_A_diff = (video.shape[0] - 2 * batchSize, video.shape[1], video.shape[2])
-output_batch_1 = np.empty(size_A_diff)
-output_diff = np.empty(size_A_diff)
+    def flush(self):
+        pass
 
-batch_1 = np.sum(video[0 : batchSize, :, :], axis=0)
-batch_2 = np.sum(video[batchSize : 2 * batchSize, :, :], axis=0)
+# Function to simulate code execution and print output
+def long_running_task():
+    for i in range(10):
+        print(f"Task is running: Step {i+1}")
+        time.sleep(1)
+    print("Task completed.")
 
-batch_1_ = np.divide(batch_1, batchSize)
-batch_2_ = np.divide(batch_2, batchSize)
+# PySimpleGUI layout
+layout = [
+    [sg.Multiline(size=(80, 20), key='-OUTPUT-', autoscroll=True, reroute_stdout=True, reroute_stderr=True)],
+    [sg.Button('Start Task')]
+]
 
-output_diff[0, :, :] = batch_2_ - batch_1_
-output_batch_1[0, :, :] = batch_1_
+# Create the window
+window = sg.Window('Terminal Output', layout, finalize=True)
 
-for i_ in range(1, video.shape[0] - 2 * batchSize):
-    batch_1 = (batch_1 - video[i_ - 1, :, :] + video[batchSize + i_ - 1, :, :])
-    batch_2 = (
-            batch_2
-            - video[batchSize + i_ - 1, :, :]
-            + video[(2 * batchSize) + i_ - 1, :, :]
-            )
-    batch_1_ = np.divide(batch_1, batchSize)
-    batch_2_ = np.divide(batch_2, batchSize)
+# Redirect stdout and stderr
+output_redirector = OutputRedirector(window, '-OUTPUT-')
+sys.stdout = output_redirector
+sys.stderr = output_redirector
 
-    output_diff[i_, :, :] = batch_2_ - batch_1_
-    output_batch_1[i_, :, :] = batch_1_
-    plt.imshow(output_diff[i_])
-    plt.show()
-    plt.close()
+# Event loop
+while True:
+    event, values = window.read(timeout=100)
+    
+    if event == sg.WINDOW_CLOSED:
+        break
+
+    if event == 'Start Task':
+        threading.Thread(target=long_running_task, daemon=True).start()
+
+    if event == '-OUTPUT-':
+        window['-OUTPUT-'].print(values['-OUTPUT-'])
+
+# Close the window
+window.close()
+
+# Reset stdout and stderr to their original values
+sys.stdout = sys.__stdout__
+sys.stderr = sys.__stderr__
+
 
