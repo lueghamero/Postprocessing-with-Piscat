@@ -18,6 +18,7 @@ from piscat.InputOutput import *
 i=0
 full_path = None
 
+# creates the figure canvas for the GUI
 def draw_figure(canvas_elem, figure):
     """Draw a Matplotlib figure on a Tkinter canvas."""
     for widget in canvas_elem.Widget.winfo_children():
@@ -191,7 +192,9 @@ playing = False
 # Event loop
 while True:
 
+    # reads the input values of the GUI
     event, values = window.read(timeout=5)
+    # reads the slider values for the batch size of the differential view in the video preview field
     batchSize = int(values['-BATCH-'])
 
     if event == sg.WINDOW_CLOSED:
@@ -199,10 +202,12 @@ while True:
 
     if event == 'Cancel':
         break
-
+    
+    # output event for the terminal
     if event == '-OUTPUT-':
         window['-OUTPUT-'].print(values['-OUTPUT-'], end='')
 
+    # reads in the folder and saves the path of the folder in the config file
     if event == '-FOLDER-':
         folder = values['-FOLDER-']
         show_only_npy = values['-SHOW_NPY-']
@@ -210,6 +215,7 @@ while True:
         window['-FILELIST-'].update(file_list)
         save_file_paths(folder, full_path_dark)  # Save the selected folder path
 
+    # checkbox event for only showing .npy files
     elif event == '-SHOW_NPY-': # Only show .npy files
         folder = values['-FOLDER-']
         show_only_npy = values['-SHOW_NPY-']
@@ -220,7 +226,8 @@ while True:
     elif event == '-FILELIST-':
         # Update selected file path, no need to change the listbox
         pass
-
+    
+    # read in the selected video from the listbox and set all the initial values which are corresponding to the video lenght
     elif event == 'Read Video':
         folder = values['-FOLDER-']
         selected_file = values['-FILELIST-'][0] if values['-FILELIST-'] else None
@@ -236,6 +243,7 @@ while True:
         else:
             print(f'File could not be loaded: {full_path}')
     
+    # option to read in the darkframe video (also from the listbox)
     elif event == 'Select as Darkframe Video':
         folder = values['-FOLDER-']
         selected_file_dark = values['-FILELIST-'][0] if values['-FILELIST-'] else None
@@ -247,18 +255,21 @@ while True:
         else:
             print(f'File could not be loaded: {full_path_dark}')
     
+    # check if video data is not none
     if video_data is not None:
-        # Update the frame
-
+        
+        # reset the frame_index advancement
         if event == '-RESET-':
             frame_index = 0
             window['-FRNR-'].update(frame_index)
 
+        # checkbox for differential view
         if values['-DIFF-'] == True:
             frame = differential_view(video_data, frame_index, batchSize)
         else:
             frame = video_data[frame_index, :, :]
         
+        # create figure for the vide preview
         ax.clear()
         ax.imshow(frame, cmap='gray')
         ax.set_title(f'Frame Number {frame_index + 1}')
@@ -279,6 +290,7 @@ while True:
         elif event == 'Stop':
             playing = False
 
+        # slider event for frame advancement
         if event == '-FRNR-' and not playing:
             frame_index = int(values['-FRNR-'])-1
 
@@ -291,11 +303,13 @@ while True:
 
         # Preprocessing
         if event == 'Preprocess Video':
-
+            
+            # checkbox for darkframe correction
             if values['-DFC-'] == True:
                 mean_dark_frame = np.mean(dark_frame_video)
                 video_dfc = np.subtract(video_data, mean_dark_frame)
                 print(video_dfc)
+                # checkbox for powernormalization of darkframe corrected video
                 if values['-PN-'] == True:
                     video_pn, power_fluctuation = Normalization(video_dfc).power_normalized()
                     ax2[0].clear()
@@ -312,7 +326,8 @@ while True:
                     ax2[1].axis('off')
                     draw_figure(canvas_elem_pn, fig2)
 
-            elif values['-DFC-'] == False:            
+            elif values['-DFC-'] == False:
+                # checkbox for powernormalization of pure video without darkframe correction            
                 if values['-PN-'] == True:
                     video_pn, power_fluctuation = Normalization(video_data).power_normalized()
                     ax2[0].clear()
@@ -329,7 +344,7 @@ while True:
                     draw_figure(canvas_elem_pn, fig2)
 
 
-
+    # select a ROI from the chosen video and crop it. This Process will close the program
     elif event == 'Crop seleceted Video':
         if 'full_path' in locals() and full_path:    
             cropper = vc(full_path)
@@ -343,5 +358,6 @@ while True:
 
 window.close()
 
+# variables for Terminal output
 sys.stdout = sys.__stdout__
 sys.stderr = sys.__stderr__
