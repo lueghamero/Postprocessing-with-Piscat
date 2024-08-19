@@ -1,4 +1,4 @@
-import ast
+
 import numpy as np
 from piscat.Visualization import * 
 from piscat.Preproccessing import * 
@@ -9,13 +9,21 @@ import matplotlib.pyplot as plt
 
 from piscat_functions import PiscatFunctions
 
-#load the video
+# load the video
+video_path = '/Users/ipeks/Desktop/DNA_PAINT_ISCAT/iScatData/BsaBioStrep.npy'
+video = np.load(video_path)
 
-video_path = '/Users/ipeks/Desktop/DNA_PAINT_ISCAT/iScatData/GNPs.npy'
-video_file = np.load(video_path, allow_pickle=True)
-video_file = video_file[200:600, :, :]
+# change it to raw and save
+videoraw_path = "/Users/ipeks/Desktop/DNA_PAINT_ISCAT/iScatData/video.raw" 
+video.tofile(videoraw_path)
+
+# load the raw video with piscat
+video_file = video_reader(file_name=videoraw_path, type='binary', img_width=256, img_height=256,
+                                   image_type=np.dtype('<u2'), s_frame=0, e_frame=-1) #Loading the video
+
 instance_video =  PiscatFunctions(video_file)
-
+# print(video_file.shape)
+# Display(video_file, time_delay=500)
 # Preprocessing 
 
 # 1) Remove the status line
@@ -35,8 +43,9 @@ instance_video =  PiscatFunctions(video_file)
 # DisplaySubplot(list_videos, numRows=1, numColumns=3, step=1, median_filter_flag=False, color='gray')
 
 # 3) Power Normalization
-video_pn = instance_video.PowerNormalized()
 
+# video_pn = instance_video.PowerNormalized()
+# Display(video_pn, time_delay=500)
 # 4) Differential Rolling Average
 
 # Find the Optimum Batch Size
@@ -45,16 +54,18 @@ video_pn = instance_video.PowerNormalized()
 # print(opt_batch)
 
 # choose between Fixed Pattern Noise Correction Methods: mFPN, cFPN, fFPN 
-mode_FPN='mFPN'
-video_pn_dra = instance_video.DifferentialAvg(1, mode_FPN, video= video_pn) 
-
+mode_FPN='cFPN'
+video_pn_dra = instance_video.DifferentialAvg(50, mode_FPN) 
+Display(video_pn_dra, time_delay=50)
 # 5) Radial Variance Transform Filtering
 # video_pn_dra_rf = instance_video.RadialFiltering(rmin=4, rmax=8, video= video_pn_dra )
 
 # Display(video_pn_dra, time_delay=200)
 
-#save_path = '/Users/ipeks/Desktop/DNA_PAINT_ISCAT/iScatData/DRAd_GNPs.npy'
-# np.save(save_path, video_pn_dra)
 
-print(video_pn_dra)
-print(video_pn_dra.shape)
+DRAd_raw_save = "/Users/ipeks/Desktop/DNA_PAINT_ISCAT/iScatData/DRAd_bio.raw" 
+video_pn_dra.tofile(DRAd_raw_save)
+
+
+#print(video_pn_dra)
+#print(video_pn_dra.shape)
