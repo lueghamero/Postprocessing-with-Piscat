@@ -118,10 +118,10 @@ def window_layout():
     ]
 
     vid_play = [
-        [sg.Button('Play'), sg.Button('Stop'), sg.Button('Previous Frame'), sg.Button('Next Frame'), 
-         sg.Checkbox("Differential View", key='-DIFF-', enable_events=True), sg.Text('Batch Size', size=(10,1)), 
-         sg.Slider((1, 50), size=(10,5), default_value=1, key='-BATCH-', orientation='horizontal', enable_events=True)],
-        [sg.Button('Reset',key='-RESET-')], 
+        [sg.Button('Play'), sg.Button('Stop'), sg.Button('Previous Frame'), 
+         sg.Slider(range=(1,5000), size=(20,10), orientation='h', key='-FRNR-', enable_events=True, disabled=True), sg.Button('Next Frame'), sg.Button('Reset',key='-RESET-')], 
+        [sg.Checkbox("Differential View", key='-DIFF-', enable_events=True), sg.Text('Batch Size:', size=(10,1)), 
+         sg.Slider((1, 160), size=(10,10), default_value=1, key='-BATCH-', orientation='horizontal', enable_events=True)], 
         [sg.Push(), sg.Canvas(key='-CANVAS-',pad=(0,0), size=(500, 500)), sg.Push()]
     ]
     
@@ -140,7 +140,7 @@ def window_layout():
             [sg.Checkbox("Power Normalisation", key='-PN-', enable_events=True)],
             [sg.Checkbox("Darkframe Correction", key='-DFC-', enable_events=True)],
             [sg.Button('Preprocess Video'),sg.Button('Show Preprocessed Video')],
-            [sg.Canvas(key='-PNCANV-', pad=(0,0), size=(1000,500))]    
+            [sg.Canvas(key='-PNCANV-', pad=(0,0), size=(1000,520))]    
     ]
 
     piscat_DRA = [
@@ -230,6 +230,7 @@ while True:
                 video_data = np.load(full_path)
                 vid_len = video_data.shape[0]
                 frame_index = 0
+                window['-FRNR-'].update(range=(1, vid_len) ,disabled=False)
                 print(f'Loaded video has {vid_len} frames.')
                 playing = False  
         else:
@@ -238,7 +239,7 @@ while True:
     elif event == 'Select as Darkframe Video':
         folder = values['-FOLDER-']
         selected_file_dark = values['-FILELIST-'][0] if values['-FILELIST-'] else None
-        if selected_file:
+        if selected_file_dark:
             full_path_dark = os.path.join(folder, selected_file_dark)
             save_file_paths(folder, full_path_dark)
             dark_frame_video = np.load(full_path_dark)
@@ -251,6 +252,7 @@ while True:
 
         if event == '-RESET-':
             frame_index = 0
+            window['-FRNR-'].update(frame_index)
 
         if values['-DIFF-'] == True:
             frame = differential_view(video_data, frame_index, batchSize)
@@ -266,18 +268,24 @@ while True:
         # Handle frame navigation
         if event == 'Next Frame':
             frame_index = (frame_index + 1) % vid_len  # Loop back to start if at end
+            window['-FRNR-'].update(frame_index+1)
             playing = False  # Stop automatic play when manually navigating frames
         elif event == 'Previous Frame':
             frame_index = (frame_index - 1) % vid_len  # Loop back to end if at start
+            window['-FRNR-'].update(frame_index+1)
             playing = False  # Stop automatic play when manually navigating frames
         elif event == 'Play':
             playing = True
         elif event == 'Stop':
             playing = False
 
+        if event == '-FRNR-' and not playing:
+            frame_index = int(values['-FRNR-'])-1
+
         # Automatically advance frames if playing
         if playing:
             frame_index = (frame_index + 1) % vid_len
+            window['-FRNR-'].update(frame_index + 1)
 
         
 
