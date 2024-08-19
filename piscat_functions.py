@@ -12,6 +12,9 @@ class PiscatFunctions:
     def __init__(self, video):
         self.video = video
 
+    def __sub__(self, other):
+        return self.video - other  
+    
     def Remove_Status_Line(self):
         status_ = read_status_line.StatusLine(self.video)  # Reading the status line
         video_sl, status_information = status_.find_status_line()  # Removing the status line
@@ -51,16 +54,14 @@ class PiscatFunctions:
         opt_batch = l_range[min_index]
         return opt_batch
     
-    def DarkFrameCorrection(self, video=None, axis=None):
-        if video is None:
-            video = self.video
+    def DarkFrameCorrection(self, video, axis=None):
         # axis = 'None': the mean dark count could also be a good measure of the global offset due to dark counts.
         if axis is None:  
-            mean_dark_frame = np.mean(self.video)
+            mean_dark_frame = np.mean(self)
         # axis = 0 (along the column), 1 (along the row)
         else :  
-            mean_dark_frame = np.mean(self.video, axis)
-        Darkframecorrected = np.subtract(self.video, mean_dark_frame)
+            mean_dark_frame = np.mean(self, axis)
+        Darkframecorrected = np.subtract(video, mean_dark_frame)
         return Darkframecorrected 
     def RadialFiltering(self, rmin, rmax, video=None):
         # After PN and DRA
