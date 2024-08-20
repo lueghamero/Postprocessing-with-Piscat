@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 class PiscatFunctions: 
     
-    def __init__(self, video):
+    def __init__(self, video, df_video):
         self.video = video
 
     def __sub__(self, other):
@@ -34,7 +34,7 @@ class PiscatFunctions:
         ax.set_title('Intensity fluctuations in the laser beam', fontsize=13)
         ax.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
         # Return the normalized video and the figure
-        return video_pn #, fig
+        return video_pn, fig
     
     def DifferentialAvg(self, batch_size, mode_FPN, video=None,):
         if video is None:
