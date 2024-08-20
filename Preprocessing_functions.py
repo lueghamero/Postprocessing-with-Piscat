@@ -11,7 +11,7 @@ def Remove_Status_Line(video):
     video_sl, status_information = status_.find_status_line()  # Removing the status line
     return video_sl
 
-def PowerNormalized(video, parallel= None):
+def PowerNormalized(video, parallel):
     video_pn, power_fluctuation = Normalization(video).power_normalized(inter_flag_parallel_active=parallel) 
     # Plotting the power fluctuations 
     fig, ax = plt.subplots()
@@ -26,7 +26,7 @@ def PowerNormalized(video, parallel= None):
     
 def DifferentialAvg(video, batch_size, mode_FPN):
     video_dr = DifferentialRollingAverage(video, batchSize=batch_size, mode_FPN=mode_FPN)
-    video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
+    video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
     return video_dra
     
 def FindOptBatch(video, l_range): # Finding the perfect batch size 

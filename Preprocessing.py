@@ -37,16 +37,17 @@ dark_video = video_reader(file_name=darkframe_path, type='binary', img_width=256
                                    image_type=np.dtype('<u2'), s_frame=0, e_frame=-1) #Loading the video
 
 video_dfc = DarkFrameCorrection(video, dark_video, axis=None)
-
+# Display(video_dfc, time_delay=10)
 # Comparing between Dark Frame Corrected and Not Corrected
 # list_videos = [video, video_dfc, video - video_dfc]
 # list_titles = ['Raw video', 'Video after \ndark frame correction', 'Difference']
 # DisplaySubplot(list_videos, numRows=1, numColumns=3, step=1, median_filter_flag=False, color='gray')
 
 # 3) Power Normalization
+video_pn, power = Normalization(video_dfc).power_normalized() 
+# video_pn = PowerNormalized(video_dfc, parallel= False) 
 
-video_pn = PowerNormalized(video_dfc, parallel = True)
-Display(video_pn, time_delay=10)
+# Display(video_pn, time_delay=10)
 # 4) Differential Rolling Average
 
 # Find the Optimum Batch Size
@@ -55,9 +56,9 @@ Display(video_pn, time_delay=10)
 # print(opt_batch)
 
 # choose between Fixed Pattern Noise Correction Methods: mFPN, cFPN, fFPN 
-# mode_FPN='cFPN'
-#video_pn_dra = instance_video.DifferentialAvg(50, mode_FPN) 
-# Display(video_pn_dra, time_delay=50)
+mode_FPN='mFPN'
+video_pn_dra = DifferentialAvg(video_pn[0:3000,:,:], 50, mode_FPN) 
+Display(video_pn_dra, time_delay=500)
 # 5) Radial Variance Transform Filtering
 # video_pn_dra_rf = instance_video.RadialFiltering(rmin=4, rmax=8, video= video_pn_dra )
 
