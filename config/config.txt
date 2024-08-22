@@ -1,2 +1,2 @@
-/Users/oliver/Desktop/iScat Messungen alt/Low PH
-/Users/oliver/Desktop/iScat Messungen alt/Normal PH (7.3)/15_35_12_Au_3mul_15042024.npy
+/Users/oliver/Desktop/iScat Messungen alt/Normal PH (7.3)
+/Users/oliver/Desktop/iScat Messungen alt/Low PH/15_49_32_BSA_Strep_pH6_1to10Gold.npy
