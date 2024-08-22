@@ -100,10 +100,10 @@ class OutputRedirector:
         pass
 
 # Load the last selected folder path
-initial_file1, initial_file2 = load_file_paths()
+folder, full_path_dark = load_file_paths()
 initial_show_only_npy = True
-initial_file_list1 = list_files_in_folder(initial_file1, initial_show_only_npy) if initial_file1 else []
-dark_frame_video = np.load(initial_file2) if initial_file2 else []
+initial_file_list1 = list_files_in_folder(folder, initial_show_only_npy) if folder else []
+dark_frame_video = np.load(full_path_dark) if full_path_dark else []
 
 
 #%%###################--------WINDOW_LAYOUT--------######################
@@ -112,7 +112,7 @@ def window_layout():
 
     vid_prep = [
         [sg.Text("Please select a folder:")],
-        [sg.Input(key='-FOLDER-', enable_events=True, default_text=initial_file1), sg.FolderBrowse()],
+        [sg.Input(key='-FOLDER-', enable_events=True, default_text=folder), sg.FolderBrowse()],
         [sg.Checkbox('Show only .npy files', key='-SHOW_NPY-', default=initial_show_only_npy, enable_events=True)],
         [sg.Listbox(values=initial_file_list1, size=(60, 10), key='-FILELIST-', auto_size_text=True, enable_events=True, select_mode=sg.LISTBOX_SELECT_MODE_SINGLE)],
         [sg.Button("Read Video"), sg.Button("Crop seleceted Video"), sg.Button("Select as Darkframe Video"), sg.Button("Cancel")]
@@ -176,8 +176,8 @@ sys.stdout = output_redirector
 sys.stderr = output_redirector
 
 #Check the second entry of the config file, if it is not empty it shows the path of the Darkframe video
-if initial_file2:
-   print(f'Loaded {initial_file2} as darkframe video')
+if full_path_dark:
+   print(f'Loaded {full_path_dark} as darkframe video')
 
 #initialize the figures for the canvas inside the GUI
 fig, ax = plt.subplots(1,1,constrained_layout=True, figsize=(2.5,2.5))
