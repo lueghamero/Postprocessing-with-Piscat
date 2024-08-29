@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from cropping_video import VideoCropper as vc
 import tkinter as tk
+import skimage
 
 from piscat.Visualization import * 
 from piscat.Preproccessing import *
@@ -15,8 +16,6 @@ from piscat.InputOutput import *
 
 #%%##################--------INITIAL--------########################
 
-i=0
-full_path = None
 
 # creates the figure canvas for the GUI
 def draw_figure(canvas_elem, figure):
@@ -122,7 +121,7 @@ def window_layout():
         [sg.Button('Play'), sg.Button('Stop'), sg.Button('Previous Frame'), 
          sg.Slider(range=(1,5000), size=(20,10), orientation='h', key='-FRNR-', enable_events=True, disabled=True), sg.Button('Next Frame'), sg.Button('Reset',key='-RESET-')], 
         [sg.Checkbox("Differential View", key='-DIFF-', enable_events=True), sg.Text('Batch Size:', size=(10,1)), 
-         sg.Slider((1, 160), size=(10,10), default_value=1, key='-BATCH-', orientation='horizontal', enable_events=True)], 
+         sg.Slider((1, 160), size=(10,10), default_value=1, key='-BATCH-', orientation='horizontal', enable_events=True),sg.Checkbox("Show filtered Video", key='-FILTVID-', enable_events=True)], 
         [sg.Push(), sg.Canvas(key='-CANVAS-',pad=(0,0), size=(500, 500)), sg.Push()]
     ]
     
@@ -137,19 +136,29 @@ def window_layout():
                        text_color='white', reroute_stdout=True, reroute_stderr=True)]
     ]
 
-    piscat_preprocessing = [
+    power_normalization_df_correction = [
             [sg.Checkbox("Power Normalisation", key='-PN-', enable_events=True)],
             [sg.Checkbox("Darkframe Correction", key='-DFC-', enable_events=True)],
-            [sg.Button('Preprocess Video'),sg.Button('Show Preprocessed Video')],
+            [sg.Button('Preprocess Video')]
+
+    ]
+
+    DRA = [
+        [sg.Column([[sg.Text('FPN correction mode')],[sg.Combo(['DRA_PN', 'cpFPNc', 'mFPNc', 'wFPNc', 'fFPNc'], key='-FPNc-', default_value='DRA_PN', size=(10), enable_events=True, readonly=True)],[sg.Button('DRA Filtering')]],vertical_alignment='top'),
+         sg.Column([[sg.Text('Batch Size')], [sg.Input(default_text='1', size=(10), key='-BATCH_IN-', enable_events=True)], [sg.Button('Show filtered Video')]],vertical_alignment='top')]
+    ]
+
+    piscat_preprocessing = [
+            [sg.Column(power_normalization_df_correction, vertical_alignment='top'), sg.VerticalSeparator(), sg.Column(DRA, vertical_alignment='top')],
             [sg.Canvas(key='-PNCANV-', pad=(0,0), size=(1000,520))]    
     ]
 
-    piscat_DRA = [
+    piscat_particle_detection = [
 
     ]
 
     tab_layout = [
-        [sg.TabGroup([[sg.Tab("Preprocessing", piscat_preprocessing), sg.Tab("DRA", piscat_DRA)]])]
+        [sg.TabGroup([[sg.Tab("Preprocessing", piscat_preprocessing), sg.Tab("Particle Detection", piscat_particle_detection)]])]
     ]
 
     piscat_layout =     [
@@ -185,9 +194,17 @@ fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(5,2.5))
 canvas_elem = window['-CANVAS-']
 canvas_elem_pn = window['-PNCANV-']
 
-#%%#######################--------MAIN--------###########################
+i=0
+full_path = None
 video_data = None
+video_pn = None
 playing = False
+im = None
+colorbar = None
+batchSize_in = 30
+
+
+#%%#######################--------MAIN--------###########################
 
 # Event loop
 while True:
@@ -258,6 +275,8 @@ while True:
     # check if video data is not none
     if video_data is not None:
         
+
+
         # reset the frame_index advancement
         if event == '-RESET-':
             frame_index = 0
@@ -266,12 +285,22 @@ while True:
         # checkbox for differential view
         if values['-DIFF-'] == True:
             frame = differential_view(video_data, frame_index, batchSize)
+            frame = frame/np.max(frame)
+        elif values['-FILTVID-'] == True:
+            frame = video_dra[frame_index, :, :]
+            frame = frame/np.max(frame)
         else:
             frame = video_data[frame_index, :, :]
+            frame = frame/np.max(frame)
         
         # create figure for the vide preview
         ax.clear()
-        ax.imshow(frame, cmap='gray')
+        im = ax.imshow(frame, cmap='viridis')
+        if colorbar is None:
+            colorbar = fig.colorbar(im, ax=ax, shrink=0.7)
+            colorbar.ax.tick_params(labelsize=5)
+        else:
+            colorbar.update_normal(im)
         ax.set_title(f'Frame Number {frame_index + 1}')
         ax.axis('off')
         draw_figure(canvas_elem, fig)  # Draw the updated figure
@@ -343,6 +372,39 @@ while True:
                     ax2[1].set_title('Preprocessed Video', fontsize=8)
                     draw_figure(canvas_elem_pn, fig2)
 
+        if event == 'DRA Filtering':
+            
+            if video_pn is not None:
+                video_dra_raw = video_pn
+            else:
+                video_dra_raw = video_data
+
+
+            if values['-FPNc-'] == 'DRA_PN':
+                video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+            elif values['-FPNc-'] == 'cpFPNc':
+                video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='cpFPN')
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+            elif values['-FPNc-'] == 'mFPNc':
+                video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='mFPN')
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+            elif values['-FPNc-'] == 'wFPNc':
+                video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='wFPN')
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+            elif values['-FPNc-'] == 'fFPNc':
+                video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='fFPN')
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+
+
+
+
+
+    if event == 'Save Preprocessed Video':
+        if video_pn is not None:
+            print(f'Saved Video')
+        else:
+            print(f'Video was not preprocessed')
 
     # select a ROI from the chosen video and crop it. This Process will close the program
     elif event == 'Crop seleceted Video':

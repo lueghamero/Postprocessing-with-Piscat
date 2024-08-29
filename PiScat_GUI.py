@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from cropping_video import VideoCropper as vc
 import tkinter as tk
+import skimage
 
 from piscat.Visualization import * 
 from piscat.Preproccessing import *
@@ -15,8 +16,6 @@ from piscat.InputOutput import *
 
 #%%##################--------INITIAL--------########################
 
-i=0
-full_path = None
 
 # creates the figure canvas for the GUI
 def draw_figure(canvas_elem, figure):
@@ -100,10 +99,10 @@ class OutputRedirector:
         pass
 
 # Load the last selected folder path
-initial_file1, initial_file2 = load_file_paths()
+folder, full_path_dark = load_file_paths()
 initial_show_only_npy = True
-initial_file_list1 = list_files_in_folder(initial_file1, initial_show_only_npy) if initial_file1 else []
-dark_frame_video = np.load(initial_file2) if initial_file2 else []
+initial_file_list1 = list_files_in_folder(folder, initial_show_only_npy) if folder else []
+dark_frame_video = np.load(full_path_dark) if full_path_dark else []
 
 
 #%%###################--------WINDOW_LAYOUT--------######################
@@ -112,7 +111,7 @@ def window_layout():
 
     vid_prep = [
         [sg.Text("Please select a folder:")],
-        [sg.Input(key='-FOLDER-', enable_events=True, default_text=initial_file1), sg.FolderBrowse()],
+        [sg.Input(key='-FOLDER-', enable_events=True, default_text=folder), sg.FolderBrowse()],
         [sg.Checkbox('Show only .npy files', key='-SHOW_NPY-', default=initial_show_only_npy, enable_events=True)],
         [sg.Listbox(values=initial_file_list1, size=(60, 10), key='-FILELIST-', auto_size_text=True, enable_events=True, select_mode=sg.LISTBOX_SELECT_MODE_SINGLE)],
         [sg.Button("Read Video"), sg.Button("Crop seleceted Video"), sg.Button("Select as Darkframe Video"), sg.Button("Cancel")]
@@ -137,19 +136,29 @@ def window_layout():
                        text_color='white', reroute_stdout=True, reroute_stderr=True)]
     ]
 
-    piscat_preprocessing = [
+    power_normalization_df_correction = [
             [sg.Checkbox("Power Normalisation", key='-PN-', enable_events=True)],
             [sg.Checkbox("Darkframe Correction", key='-DFC-', enable_events=True)],
-            [sg.Button('Preprocess Video'),sg.Button('Show Preprocessed Video')],
+            [sg.Button('Preprocess Video')]
+
+    ]
+
+    DRA = [
+        [sg.Column([[sg.Text('FPN correction mode')],[sg.Combo(['DRA_PN', 'cpFPNc', 'mFPNc', 'wFPNc', 'fFPNc'], key='-FPNc-', default_value='DRA_PN', size=(10), enable_events=True, readonly=True)],[sg.Button('DRA Filtering')]],vertical_alignment='top'),
+         sg.Column([[sg.Text('Batch Size')], [sg.Input(default_text='1', size=(10), key='-BATCH_IN-')], [sg.Button('Find Ideal Batch Size')]],vertical_alignment='top')]
+    ]
+
+    piscat_preprocessing = [
+            [sg.Column(power_normalization_df_correction, vertical_alignment='top'), sg.VerticalSeparator(), sg.Column(DRA, vertical_alignment='top')],
             [sg.Canvas(key='-PNCANV-', pad=(0,0), size=(1000,520))]    
     ]
 
-    piscat_DRA = [
+    piscat_particle_detection = [
 
     ]
 
     tab_layout = [
-        [sg.TabGroup([[sg.Tab("Preprocessing", piscat_preprocessing), sg.Tab("DRA", piscat_DRA)]])]
+        [sg.TabGroup([[sg.Tab("Preprocessing", piscat_preprocessing), sg.Tab("Particle Detection", piscat_particle_detection)]])]
     ]
 
     piscat_layout =     [
@@ -176,8 +185,8 @@ sys.stdout = output_redirector
 sys.stderr = output_redirector
 
 #Check the second entry of the config file, if it is not empty it shows the path of the Darkframe video
-if initial_file2:
-   print(f'Loaded {initial_file2} as darkframe video')
+if full_path_dark:
+   print(f'Loaded {full_path_dark} as darkframe video')
 
 #initialize the figures for the canvas inside the GUI
 fig, ax = plt.subplots(1,1,constrained_layout=True, figsize=(2.5,2.5))
@@ -185,9 +194,16 @@ fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(5,2.5))
 canvas_elem = window['-CANVAS-']
 canvas_elem_pn = window['-PNCANV-']
 
-#%%#######################--------MAIN--------###########################
+i=0
+full_path = None
 video_data = None
+video_pn = None
 playing = False
+im = None
+colorbar = None
+batchSize_in = 1
+
+#%%#######################--------MAIN--------###########################
 
 # Event loop
 while True:
@@ -266,12 +282,19 @@ while True:
         # checkbox for differential view
         if values['-DIFF-'] == True:
             frame = differential_view(video_data, frame_index, batchSize)
+            frame = frame/np.max(frame)
         else:
             frame = video_data[frame_index, :, :]
+            frame = frame/np.max(frame)
         
         # create figure for the vide preview
         ax.clear()
-        ax.imshow(frame, cmap='gray')
+        im = ax.imshow(frame, cmap='viridis')
+        if colorbar is None:
+            colorbar = fig.colorbar(im, ax=ax, shrink=0.7)
+            colorbar.ax.tick_params(labelsize=5)
+        else:
+            colorbar.update_normal(im)
         ax.set_title(f'Frame Number {frame_index + 1}')
         ax.axis('off')
         draw_figure(canvas_elem, fig)  # Draw the updated figure
@@ -343,6 +366,15 @@ while True:
                     ax2[1].set_title('Preprocessed Video', fontsize=8)
                     draw_figure(canvas_elem_pn, fig2)
 
+
+
+
+
+    if event == 'Save Preprocessed Video':
+        if video_pn is not None:
+            print(f'Saved Video')
+        else:
+            print(f'Video was not preprocessed')
 
     # select a ROI from the chosen video and crop it. This Process will close the program
     elif event == 'Crop seleceted Video':
