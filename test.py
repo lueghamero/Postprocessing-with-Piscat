@@ -1,60 +1,35 @@
 import PySimpleGUI as sg
-import sys
-import time
-import threading
-from io import StringIO
 
-# Redirect stdout and stderr
-class OutputRedirector:
-    def __init__(self, window, key):
-        self.window = window
-        self.key = key
-
-    def write(self, message):
-        self.window.write_event_value(self.key, message)
-
-    def flush(self):
-        pass
-
-# Function to simulate code execution and print output
-def long_running_task():
-    for i in range(10):
-        print(f"Task is running: Step {i+1}")
-        time.sleep(1)
-    print("Task completed.")
-
-# PySimpleGUI layout
+# Define the layout with an input field and output field
 layout = [
-    [sg.Multiline(size=(80, 20), key='-OUTPUT-', autoscroll=True, reroute_stdout=True, reroute_stderr=True)],
-    [sg.Button('Start Task')]
+    [sg.Text('Enter an integer:')],
+    [sg.Input(key='-INPUT-', enable_events=True, size=(10, 1))],
+    [sg.Text('Output:'), sg.Text('', key='-OUTPUT-', size=(15, 1))],
+    [sg.Button('Exit')]
 ]
 
 # Create the window
-window = sg.Window('Terminal Output', layout, finalize=True)
+window = sg.Window('Real-time Integer Input Example', layout)
 
-# Redirect stdout and stderr
-output_redirector = OutputRedirector(window, '-OUTPUT-')
-sys.stdout = output_redirector
-sys.stderr = output_redirector
-
-# Event loop
+# Event loop to process events and get values from inputs
 while True:
-    event, values = window.read(timeout=100)
-    
-    if event == sg.WINDOW_CLOSED:
+    event, values = window.read(timeout=100)  # Use timeout to keep the GUI responsive
+
+    if event == sg.WIN_CLOSED or event == 'Exit':  # Exit condition
         break
 
-    if event == 'Start Task':
-        threading.Thread(target=long_running_task, daemon=True).start()
-
-    if event == '-OUTPUT-':
-        window['-OUTPUT-'].print(values['-OUTPUT-'])
+    # When input field changes, try to convert it to an integer
+    if event == '-INPUT-':
+        user_input = values['-INPUT-']
+        try:
+            user_input = int(user_input)  # Convert the input to an integer
+            window['-OUTPUT-'].update(f"You entered: {user_input}")  # Update output field with the integer
+        except ValueError:
+            window['-OUTPUT-'].update("Invalid input!")  # Update output field with an error message
 
 # Close the window
 window.close()
 
-# Reset stdout and stderr to their original values
-sys.stdout = sys.__stdout__
-sys.stderr = sys.__stderr__
+
 
 

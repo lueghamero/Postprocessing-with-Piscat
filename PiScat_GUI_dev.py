@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from cropping_video import VideoCropper as vc
 import tkinter as tk
+import skimage
 
 from piscat.Visualization import * 
 from piscat.Preproccessing import *
@@ -15,8 +16,6 @@ from piscat.InputOutput import *
 
 #%%##################--------INITIAL--------########################
 
-i=0
-full_path = None
 
 # creates the figure canvas for the GUI
 def draw_figure(canvas_elem, figure):
@@ -115,15 +114,16 @@ def window_layout():
         [sg.Input(key='-FOLDER-', enable_events=True, default_text=folder), sg.FolderBrowse()],
         [sg.Checkbox('Show only .npy files', key='-SHOW_NPY-', default=initial_show_only_npy, enable_events=True)],
         [sg.Listbox(values=initial_file_list1, size=(60, 10), key='-FILELIST-', auto_size_text=True, enable_events=True, select_mode=sg.LISTBOX_SELECT_MODE_SINGLE)],
-        [sg.Button("Read Video"), sg.Button("Crop seleceted Video"), sg.Button("Select as Darkframe Video"), sg.Button("Cancel")]
+        [sg.Button("Read Video"), sg.Button("Crop seleceted Video"), sg.Button("Select as Darkframe Video"),
+          sg.OptionMenu(["Enable Video Player: NO", "Enable Video Player: YES"], default_value = "Enable Video Player: NO", key = '-PLAY OPTION-', background_color='lightgrey', text_color='black')]
     ]
 
     vid_play = [
         [sg.Button('Play'), sg.Button('Stop'), sg.Button('Previous Frame'), 
          sg.Slider(range=(1,5000), size=(20,10), orientation='h', key='-FRNR-', enable_events=True, disabled=True), sg.Button('Next Frame'), sg.Button('Reset',key='-RESET-')], 
         [sg.Checkbox("Differential View", key='-DIFF-', enable_events=True), sg.Text('Batch Size:', size=(10,1)), 
-         sg.Slider((1, 160), size=(10,10), default_value=1, key='-BATCH-', orientation='horizontal', enable_events=True)], 
-        [sg.Push(), sg.Canvas(key='-CANVAS-',pad=(0,0), size=(500, 500)), sg.Push()]
+         sg.Slider((1, 160), size=(10,10), default_value=1, key='-BATCH-', orientation='horizontal', enable_events=True),sg.Checkbox("Show filtered Video", key='-FILTVID-', enable_events=True)], 
+        [sg.Push(), sg.Canvas(key='-CANVAS-',pad=(0,0)), sg.Push()]
     ]
     
     vid_layout = [
@@ -137,19 +137,29 @@ def window_layout():
                        text_color='white', reroute_stdout=True, reroute_stderr=True)]
     ]
 
-    piscat_preprocessing = [
+    power_normalization_df_correction = [
             [sg.Checkbox("Power Normalisation", key='-PN-', enable_events=True)],
             [sg.Checkbox("Darkframe Correction", key='-DFC-', enable_events=True)],
-            [sg.Button('Preprocess Video'),sg.Button('Show Preprocessed Video')],
+            [sg.Button('Preprocess Video')]
+
+    ]
+
+    DRA = [
+        [sg.Column([[sg.Text('FPN correction mode')],[sg.Combo(['DRA_PN', 'cpFPNc', 'mFPNc', 'wFPNc', 'fFPNc'], key='-FPNc-', default_value='DRA_PN', size=(10), enable_events=True, readonly=True)],[sg.Button('DRA Filtering')]],vertical_alignment='top'),
+         sg.Column([[sg.Text('Batch Size')], [sg.Input(default_text='1', size=(10), key='-BATCH_IN-', enable_events=True)], [sg.Button('Find Optimal Batch Size')]],vertical_alignment='top')]
+    ]
+
+    piscat_preprocessing = [
+            [sg.Column(power_normalization_df_correction, vertical_alignment='top'), sg.VerticalSeparator(), sg.Column(DRA, vertical_alignment='top')],
             [sg.Canvas(key='-PNCANV-', pad=(0,0), size=(1000,520))]    
     ]
 
-    piscat_DRA = [
+    piscat_particle_detection = [
 
     ]
 
     tab_layout = [
-        [sg.TabGroup([[sg.Tab("Preprocessing", piscat_preprocessing), sg.Tab("DRA", piscat_DRA)]])]
+        [sg.TabGroup([[sg.Tab("Preprocessing", piscat_preprocessing), sg.Tab("Particle Detection", piscat_particle_detection)]])]
     ]
 
     piscat_layout =     [
@@ -159,7 +169,7 @@ def window_layout():
     ]
 
     layout = [
-        [sg.Column(vid_layout, vertical_alignment='top',expand_x=True, expand_y=True), sg.VerticalSeparator(), 
+        [sg.Column(vid_layout, vertical_alignment='top'), sg.VerticalSeparator(), 
          sg.Column(piscat_layout, vertical_alignment='top', expand_x=True, expand_y=True)]
     ]
 
@@ -180,14 +190,31 @@ if full_path_dark:
    print(f'Loaded {full_path_dark} as darkframe video')
 
 #initialize the figures for the canvas inside the GUI
-fig, ax = plt.subplots(1,1,constrained_layout=True, figsize=(2.5,2.5))
-fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(5,2.5))
+px = 1/plt.rcParams['figure.dpi']  # pixel in inches
+
+fig, ax = plt.subplots(1,1,constrained_layout=True, figsize=(500*px,500*px))
+fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(10,5))
 canvas_elem = window['-CANVAS-']
 canvas_elem_pn = window['-PNCANV-']
 
-#%%#######################--------MAIN--------###########################
+decoy_img = np.linspace(0, 255, 256*256).reshape(256, 256)
+
+ax.clear()
+im = ax.imshow(decoy_img, cmap='gray', vmin=0, vmax=255)
+ax.axis('off')
+draw_figure(canvas_elem, fig)
+
+i=0
+full_path = None
 video_data = None
+video_pn = None
 playing = False
+im = None
+colorbar = None
+batchSize_in = 30
+
+
+#%%#######################--------MAIN--------###########################
 
 # Event loop
 while True:
@@ -197,10 +224,8 @@ while True:
     # reads the slider values for the batch size of the differential view in the video preview field
     batchSize = int(values['-BATCH-'])
 
-    if event == sg.WINDOW_CLOSED:
-        break
 
-    if event == 'Cancel':
+    if event == sg.WINDOW_CLOSED:
         break
     
     # output event for the terminal
@@ -255,55 +280,69 @@ while True:
         else:
             print(f'File could not be loaded: {full_path_dark}')
     
-    # check if video data is not none
-    if video_data is not None:
-        
-        # reset the frame_index advancement
-        if event == '-RESET-':
-            frame_index = 0
-            window['-FRNR-'].update(frame_index)
 
-        # checkbox for differential view
-        if values['-DIFF-'] == True:
-            frame = differential_view(video_data, frame_index, batchSize)
-        else:
-            frame = video_data[frame_index, :, :]
-        
-        # create figure for the vide preview
-        ax.clear()
-        ax.imshow(frame, cmap='gray')
-        ax.set_title(f'Frame Number {frame_index + 1}')
-        ax.axis('off')
-        draw_figure(canvas_elem, fig)  # Draw the updated figure
+    elif values['-PLAY OPTION-'] == "Enable Video Player: YES":
+        if video_data is not None:
+            # checkbox for differential view
+            if values['-DIFF-'] == True:
+                frame = differential_view(video_data, frame_index, batchSize)
+                frame = frame/np.max(frame)
+            elif values['-FILTVID-'] == True:
+                frame = video_dra[frame_index, :, :]
+                frame = frame/np.max(frame)
+                vid_len = video_dra.shape[0]
+            else:
+                frame = video_data[frame_index, :, :]
+                frame = frame/np.max(frame)
+                vid_len = video_data.shape[0]
 
-        # Handle frame navigation
-        if event == 'Next Frame':
-            frame_index = (frame_index + 1) % vid_len  # Loop back to start if at end
-            window['-FRNR-'].update(frame_index+1)
-            playing = False  # Stop automatic play when manually navigating frames
-        elif event == 'Previous Frame':
-            frame_index = (frame_index - 1) % vid_len  # Loop back to end if at start
-            window['-FRNR-'].update(frame_index+1)
-            playing = False  # Stop automatic play when manually navigating frames
-        elif event == 'Play':
-            playing = True
-        elif event == 'Stop':
-            playing = False
+            # reset the frame_index advancement
+            if event == '-RESET-':
+                frame_index = 0
+                window['-FRNR-'].update(frame_index)
+            # Handle frame navigation
+            elif event == 'Next Frame':
+                frame_index = (frame_index + 1) % vid_len  # Loop back to start if at end
+                window['-FRNR-'].update(frame_index+1)
+                playing = False  # Stop automatic play when manually navigating frames
+            elif event == 'Previous Frame':
+                frame_index = (frame_index - 1) % vid_len  # Loop back to end if at start
+                window['-FRNR-'].update(frame_index+1)
+                playing = False  # Stop automatic play when manually navigating frames
+            elif event == 'Play':
+                playing = True
+            elif event == 'Stop':
+                playing = False
 
-        # slider event for frame advancement
-        if event == '-FRNR-' and not playing:
-            frame_index = int(values['-FRNR-'])-1
+            # slider event for frame advancement
+            if event == '-FRNR-' and not playing:
+                frame_index = int(values['-FRNR-'])-1
 
-        # Automatically advance frames if playing
-        if playing:
-            frame_index = (frame_index + 1) % vid_len
-            window['-FRNR-'].update(frame_index + 1)
+                # Automatically advance frames if playing
+            if playing:
+                frame_index = (frame_index + 1) % vid_len
+                window['-FRNR-'].update(frame_index + 1)
+                
+            # create figure for the vide preview
+            ax.clear()
+            im = ax.imshow(frame, cmap='viridis')
+            if colorbar is None:
+                colorbar = fig.colorbar(im, ax=ax, shrink=0.7)
+                colorbar.ax.tick_params(labelsize=5)
+            else:
+                colorbar.update_normal(im)
+            ax.set_title(f'Frame Number {frame_index + 1}')
+            ax.axis('off')
+            draw_figure(canvas_elem, fig)  # Draw the updated figure
 
-        
+    elif event == '-BATCH_IN-':
+        try:
+            batchSize_in = int(values['-BATCH_IN-'])
+        except:
+            print(f'Invalid Batch Size')
 
-        # Preprocessing
-        if event == 'Preprocess Video':
-            
+    elif event == 'Preprocess Video':
+        if video_data is not None:    
             # checkbox for darkframe correction
             if values['-DFC-'] == True:
                 mean_dark_frame = np.mean(dark_frame_video)
@@ -342,19 +381,55 @@ while True:
                     ax2[1].imshow(frame_pn, cmap='gray')
                     ax2[1].set_title('Preprocessed Video', fontsize=8)
                     draw_figure(canvas_elem_pn, fig2)
-
-
-    # select a ROI from the chosen video and crop it. This Process will close the program
-    elif event == 'Crop seleceted Video':
-        if 'full_path' in locals() and full_path:    
-            cropper = vc(full_path)
-            cropper.select_roi(frame_index=10)
-            cropped_video_data = cropper.crop_video()
-            cropper.save_cropped_video(cropped_video_data)
         else:
-            sg.popup('Please load a video file first.')
+            print(f'Please select a video first')
 
 
+    elif event == 'Find Optimal Batch Size':
+        if video_data is not None:
+            batch_video = video_data
+        elif video_pn is not None:
+            batch_video = video_pn
+        else:
+            print(f'Please select a video first')
+        l_range = list(range(10, 50, 10))   
+        noise_floor= NoiseFloor(batch_video, list_range=l_range)
+        # Optimal value for the batch size
+        min_value = min(noise_floor.mean)
+        min_index = noise_floor.mean.index(min_value)
+        opt_batch = l_range[min_index]
+        print(f'Optimal Batch: {opt_batch}')
+        window['-BATCH_IN-'].update(opt_batch)
+    
+
+    elif event == 'DRA Filtering':
+        if video_data is not None:
+            print(f'Batch Size is: {batchSize_in}')
+
+            if video_pn is not None:
+                video_dra_raw = video_pn
+            else:
+                video_dra_raw = video_data
+
+
+            if values['-FPNc-'] == 'DRA_PN':
+                video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+            elif values['-FPNc-'] == 'cpFPNc':
+                video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='cpFPN')
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+            elif values['-FPNc-'] == 'mFPNc':
+                video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='mFPN')
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+            elif values['-FPNc-'] == 'wFPNc':
+                video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='wFPN')
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+            elif values['-FPNc-'] == 'fFPNc':
+                video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='fFPN')
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+        
+        else:
+            print(f'Please select a video first')
 
 window.close()
 
