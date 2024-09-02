@@ -10,6 +10,7 @@ from piscat.Visualization import *
 from piscat.Preproccessing import Normalization
 from piscat.BackgroundCorrection import NoiseFloor
 from piscat.BackgroundCorrection import DifferentialRollingAverage
+from piscat.Localization import *
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
 import cv2
@@ -26,6 +27,29 @@ filename_measurement = os.path.splitext(os.path.basename(filename))[0]
 video_data = np.load(filename)
 #video_data = np.transpose(video_data, (1, 2, 0))
 
+video_pn, power_fluctuation = Normalization(video=video_data).power_normalized()
+
+video_dr = DifferentialRollingAverage(video=video_pn, batchSize=30, mode_FPN='mFPN')
+video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
+
+PSF = PSFsExtraction(video = video_dra ,flag_transform = True, flag_GUI = True)
+
+df_PSFs = PSF.psf_detection(function='dog',  
+                          min_sigma=5, max_sigma=8, sigma_ratio=1.5, threshold=8e-2,
+                          overlap=0, mode='BOTH')
+                        
+
+print(df_PSFs)
+
+
+
+
+
+
+
+
+
+"""
 # Ensure the pixel values are within the correct range
 if video_data.dtype != np.uint8 or video_data.min() < 0 or video_data.max() > 255:
     # Normalize the pixel values to the range 0-255 and convert to uint8
@@ -57,9 +81,6 @@ print("Shape of the video data:", processed_vid.shape)
 # Release the video window
 cv2.destroyAllWindows()
 
-
-
-"""
 # Calculate the center of the frame
 center_x, center_y = frame_width // 2, frame_height // 2
 crop_size = 128
@@ -95,10 +116,10 @@ for frame_index in range(num_frames):
 
 # Release the video window
 cv2.destroyAllWindows()
-"""
 
 
-"""
+
+
 df_video = reading_videos.DirectoryType(filename, type_file='raw').return_df()
 paths = df_video['Directory'].tolist()
 video_names = df_video['File'].tolist()

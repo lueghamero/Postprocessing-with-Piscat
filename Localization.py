@@ -23,7 +23,7 @@ frame_number = list(range(1, n))
 
 PSF = PSFsExtraction(video = dra_video ,flag_transform = True, flag_GUI = True)
 
-df_PSFs = PSF.psf_detection_preview(function='dog',  
+df_PSFs = PSF.psf_detection(function='dog',  
                           min_sigma=5, max_sigma=8, sigma_ratio=1.5, threshold=8e-2,
                           overlap=0, mode='BOTH', frame_number = frame_number)
                         

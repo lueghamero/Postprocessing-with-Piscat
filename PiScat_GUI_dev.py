@@ -14,7 +14,7 @@ from piscat.Preproccessing import *
 from piscat.BackgroundCorrection import *
 from piscat.InputOutput import *
 
-#%%##################--------INITIAL--------########################
+#%%##################--------FUNCTIONS--------########################
 
 
 # creates the figure canvas for the GUI
@@ -85,6 +85,21 @@ def differential_view(video, frame_index, batchSize):
 
     return output_diff
 
+def delete_CPU_config():
+
+    subdir = "piscat_configuration"
+    here = os.path.abspath(os.path.join(os.getcwd(), '..'))
+    filepath = os.path.join(here, subdir, "cpu_configurations.json")
+    if os.path.exists(filepath):
+        try:
+            os.remove(filepath)
+            print(f"Configuration file {filepath} deleted successfully.")
+        except OSError as e:
+            print(f"Error: {filepath} : {e.strerror}")
+    else:
+        print(f"Configuration file {filepath} does not exist.")
+
+
 
 #Class for redirecting Terminal Output to GUI
 class OutputRedirector:
@@ -104,10 +119,18 @@ initial_show_only_npy = True
 initial_file_list1 = list_files_in_folder(folder, initial_show_only_npy) if folder else []
 dark_frame_video = np.load(full_path_dark) if full_path_dark else []
 
+cpu_settings = CPUConfigurations()
+n_jobs=cpu_settings.n_jobs
+backend=cpu_settings.backend
+verbose=cpu_settings.verbose,
+parallel_active=cpu_settings.parallel_active
+
 
 #%%###################--------WINDOW_LAYOUT--------######################
 
 def window_layout():
+
+    menu_def = [['&Options', ['CPU Configuration']]]
 
     vid_prep = [
         [sg.Text("Please select a folder:")],
@@ -169,6 +192,7 @@ def window_layout():
     ]
 
     layout = [
+        [sg.Menu(menu_def)],
         [sg.Column(vid_layout, vertical_alignment='top'), sg.VerticalSeparator(), 
          sg.Column(piscat_layout, vertical_alignment='top', expand_x=True, expand_y=True)]
     ]
@@ -178,7 +202,33 @@ def window_layout():
     
     return window
 
+def CPU_window_layout():
+
+    left_column = [
+        [sg.Text('Number of Cores:')],
+        [sg.Text('Verbosity Level:')],
+        [sg.Text('Parallel Method:')]
+    ]
+
+    right_column = [
+        [sg.Input(default_text='-1', size=(20), key='-N_JOBS-')],
+        [sg.Input(default_text='10', size=(20), key='-VERBOS-')],
+        [sg.Combo(['loky', 'threading'], key='-BACKEND-', default_value='loky', size=(20), enable_events=True, readonly=True)]
+    ]
+
+    CPU_layout = [
+        [sg.Checkbox('Enable Parallel Computing', key='-PARALLEL-', default=True, enable_events=True)],
+        [sg.Checkbox('Show the CPU Settings', key='-FLAG-', default=True, enable_events=True)],
+        [sg.Column(left_column),sg.Column(right_column)],
+        [sg.Button('Submit')]
+    ]
+    cpu_window =  sg.Window('CPU Configuration for Parallel Computing', CPU_layout, size=(300,300), resizable=True, finalize=True)
+
+    return cpu_window
+
 window = window_layout()
+
+#%%##################--------INITIALIZATION--------########################
 
 #Redirecting Terminal Output to the GUI
 output_redirector = OutputRedirector(window, '-OUTPUT-')
@@ -192,7 +242,7 @@ if full_path_dark:
 #initialize the figures for the canvas inside the GUI
 px = 1/plt.rcParams['figure.dpi']  # pixel in inches
 
-fig, ax = plt.subplots(1,1,constrained_layout=True, figsize=(500*px,500*px))
+fig, ax = plt.subplots(1,1,constrained_layout=True, figsize=(250*px,250*px)) #Change the Inset to the canvas her, it depends on the computer you are using it
 fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(10,5))
 canvas_elem = window['-CANVAS-']
 canvas_elem_pn = window['-PNCANV-']
@@ -213,7 +263,6 @@ im = None
 colorbar = None
 batchSize_in = 30
 
-
 #%%#######################--------MAIN--------###########################
 
 # Event loop
@@ -222,12 +271,25 @@ while True:
     # reads the input values of the GUI
     event, values = window.read(timeout=5)
     # reads the slider values for the batch size of the differential view in the video preview field
-    batchSize = int(values['-BATCH-'])
+
+
+    # Opens window for CPU Options
+    if event == 'CPU Configuration':
+        cpu_window = CPU_window_layout()
+        event2, value2 = cpu_window.read(timeout=100)
+
+        if event == sg.WINDOW_CLOSED:
+            break
+
+
+
 
 
     if event == sg.WINDOW_CLOSED:
         break
     
+    batchSize = int(values['-BATCH-'])
+
     # output event for the terminal
     if event == '-OUTPUT-':
         window['-OUTPUT-'].print(values['-OUTPUT-'], end='')
