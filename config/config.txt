@@ -1,2 +1,3 @@
-/Users/oliver/Desktop/iScat Messungen alt/Normal PH (7.3)
-/Users/oliver/Desktop/iScat Messungen alt/Normal PH (7.3)/14_39_12_BsaBioStrep_Au_3x3mul_16042024.npy
+Z:/Work/microscopy/Personal Share/Barbara/photonfocus_data/2024_08_08_data
+Z:/Work/microscopy/Personal Share/Barbara/photonfocus_data/2024_08_08_data\14_36_08_dark_frame.npy
+C:/Users/Dante/Desktop/Processed iScat Vids

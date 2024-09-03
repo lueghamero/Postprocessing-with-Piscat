@@ -36,9 +36,9 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.txt')
 
 
 # Function to save the folder path to a config file
-def save_file_paths(file_path1,file_path2):
+def save_file_paths(file_path1, file_path2, file_path3, file_path4):
     with open(CONFIG_FILE, 'w') as file:
-        file.write(f"{file_path1}\n{file_path2}")
+        file.write(f"{file_path1}\n{file_path2}\n{file_path3}\n{file_path4}")
 
 
 # Function to load the folder path from a config file
@@ -46,8 +46,13 @@ def load_file_paths():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r') as file:
             paths = file.read().strip().split('\n')
-            return paths[0], paths[1] if len(paths) > 1 else ''
-    return '', ''
+            return(
+                paths[0] if len(paths) > 0 else '',
+                paths[1] if len(paths) > 1 else '',
+                paths[2] if len(paths) > 2 else '',
+                paths[3] if len(paths) > 3 else '',
+            )
+    return '', '', '', ''
 
 
 # Function to list files in a folder
@@ -117,7 +122,7 @@ class OutputRedirector:
         pass
 
 # Load the last selected folder path
-folder, full_path_dark = load_file_paths()
+folder, full_path_dark, saving_folder, PSF_folder = load_file_paths()
 initial_show_only_npy = True
 initial_file_list1 = list_files_in_folder(folder, initial_show_only_npy) if folder else []
 dark_frame_video = np.load(full_path_dark) if full_path_dark else []
@@ -132,9 +137,11 @@ parallel_active=cpu_settings.parallel_active
 
 #%%###################--------WINDOW_LAYOUT--------######################
 
+#------------------------------------------------------------------------
+# Main Window:
 def window_layout():
 
-    menu_def = [['&Options', ['&CPU Configuration', '&Inlay Scaling']]]
+    menu_def = [['&Options', ['&CPU Configuration', '&Inlay Scaling']],['&Data', ['&Save', '&Load', '---','&Info']]]
 
     vid_prep = [
         [sg.Text("Please select a folder:")],
@@ -187,12 +194,14 @@ def window_layout():
             [sg.Canvas(key='-PNCANV-', pad=(0,0), size=(1000,520))]    
     ]
 
-    piscat_particle_detection = [
+    piscat_psf_detection = [ 
+        [sg.Text('Filtering Mode:')],
+        [sg.Combo(['DOG', 'LOG', 'DOH', 'RVT'], key='-PSF_MODE-', default_value='DOH', enable_events=True, readonly=True)]   
 
     ]
 
     tab_layout = [
-        [sg.TabGroup([[sg.Tab("Preprocessing", piscat_preprocessing), sg.Tab("Particle Detection", piscat_particle_detection)]])]
+        [sg.TabGroup([[sg.Tab("Preprocessing", piscat_preprocessing), sg.Tab("Particle Detection", piscat_psf_detection)]])]
     ]
 
     piscat_layout =     [
@@ -211,6 +220,9 @@ def window_layout():
     window = sg.Window('iScat Postprocessing using PiScat', layout, size = (1600,900), resizable=True, finalize=True)
     
     return window
+
+#------------------------------------------------------------------------
+# Option Window CPU Configuration:
 
 def CPU_window_layout():
 
@@ -238,9 +250,12 @@ def CPU_window_layout():
                                   [sg.Text('ATTENTION!\n If the JSON file is not changed after Submission,\n a restart of the IDE might help')]], expand_x=True, expand_y=True)]
 
     ]
-    cpu_window =  sg.Window('CPU Configuration for Parallel Computing', CPU_layout, size=(300,380), resizable=True, finalize=True)
+    cpu_window =  sg.Window('CPU Configuration for Parallel Computing', CPU_layout, resizable=True, finalize=True)
 
     return cpu_window
+
+#------------------------------------------------------------------------
+# Option Window Inlay Scaling:
 
 def Inlay_scaling_layout():
 
@@ -250,9 +265,33 @@ def Inlay_scaling_layout():
         [sg.Push(), sg.Button('Submit', key='-SUB_SCALE-'), sg.Push()]
     ]
 
-    scaling_window = sg.Window('Scaling Configuration', Inlay_layout, size=(500,100), resizable=True, finalize=True)
+    scaling_window = sg.Window('Scaling Configuration', Inlay_layout, resizable=True, finalize=True)
 
     return scaling_window
+
+#------------------------------------------------------------------------
+# Data Window Save:
+
+def Saving_layout():
+    
+    save_layout = [
+        [sg.Push(),sg.Text('Choose a Folder for saving Processed Videos'), sg.Push()], 
+        [sg.Push(),sg.Input(key='-SAVING_FOLDER-', enable_events=True, default_text=saving_folder), sg.FolderBrowse(),sg.Push()],
+        [sg.Checkbox('Save Power Normalized Video', enable_events=True, key='-SAVE_PN-', default=False)],
+        [sg.Checkbox('Save DRA Filtered Video', enable_events=True, key='-SAVE_DRA-', default=True)],
+        [sg.Checkbox('Delete Video Data from Memory', enable_events=True, key='-DELETE_VID-', default=True)],
+        [sg.Push(), sg.Button('Save Video Data'), sg.Button('Save PSF Data'), sg.Push()]
+    ]
+
+    saving_window = sg.Window('Save Data', save_layout, resizable=True, finalize=True)
+
+    return saving_window
+
+
+
+
+#------------------------------------------------------------------------
+# Data Window Load:
 
 window = window_layout()
 
@@ -297,7 +336,7 @@ batchSize_in = 30
 while True:
 
     # reads the input values of the GUI
-    event, values = window.read(timeout=5)
+    event, values = window.read(timeout=100)
     # reads the slider values for the batch size of the differential view in the video preview field
 
 #---------------------------------------------------------
@@ -377,6 +416,42 @@ while True:
                 print(f'Changed Inlay Scaling to: {pxu}')
 
                 scaling_window.close()
+
+#---------------------------------------------------------
+    # Open Window for Saving Data
+    if event == 'Save':
+        saving_window = Saving_layout()
+
+        while True:
+            
+            event4, value4 = saving_window.read(timeout=10)
+
+            if event4 == sg.WINDOW_CLOSED:
+                break
+                
+            elif event4  == '-SAVING_FOLDER-':
+                saving_folder = value4['-SAVING_FOLDER-']
+                save_file_paths(folder, full_path_dark, saving_folder, PSF_folder) 
+
+
+            elif event4 == 'Save Video Data':
+
+                if value4['-SAVE_PN-'] == True:
+                    if video_pn is not None:
+                        if value4['-DELETE_VID-'] == False:
+                            np.save(saving_folder, video_pn)
+                            video_pn = None
+                        else:
+                            np.save(saving_folder, video_pn)
+                    else:
+                        print(f'There is no Power Normalized Video in the Memory')
+
+
+                if value4['-SAVE_DRA-']:
+                    pass
+
+
+                
 
 #---------------------------------------------------------
 # Main window again
