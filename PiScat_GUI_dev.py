@@ -13,6 +13,9 @@ from piscat.Visualization import *
 from piscat.Preproccessing import *
 from piscat.BackgroundCorrection import *
 from piscat.InputOutput import *
+from piscat.Localization import *
+
+psf = particle_localization.PSFsExtraction
 
 #%%##################--------FUNCTIONS--------########################
 
@@ -119,6 +122,7 @@ initial_show_only_npy = True
 initial_file_list1 = list_files_in_folder(folder, initial_show_only_npy) if folder else []
 dark_frame_video = np.load(full_path_dark) if full_path_dark else []
 
+# Load CPU settings from the config file
 cpu_settings = CPUConfigurations()
 n_jobs=cpu_settings.n_jobs
 backend=cpu_settings.backend
@@ -130,7 +134,7 @@ parallel_active=cpu_settings.parallel_active
 
 def window_layout():
 
-    menu_def = [['&Options', ['CPU Configuration']]]
+    menu_def = [['&Options', ['&CPU Configuration', '&Inlay Scaling']]]
 
     vid_prep = [
         [sg.Text("Please select a folder:")],
@@ -143,9 +147,11 @@ def window_layout():
 
     vid_play = [
         [sg.Button('Play'), sg.Button('Stop'), sg.Button('Previous Frame'), 
-         sg.Slider(range=(1,5000), size=(20,10), orientation='h', key='-FRNR-', enable_events=True, disabled=True), sg.Button('Next Frame'), sg.Button('Reset',key='-RESET-')], 
+         sg.Slider(range=(1,5000), size=(20,10), orientation='h', key='-FRNR-', enable_events=True, disabled=True), 
+         sg.Button('Next Frame'), sg.Button('Reset',key='-RESET-')], 
         [sg.Checkbox("Differential View", key='-DIFF-', enable_events=True), sg.Text('Batch Size:', size=(10,1)), 
-         sg.Slider((1, 160), size=(10,10), default_value=1, key='-BATCH-', orientation='horizontal', enable_events=True),sg.Checkbox("Show filtered Video", key='-FILTVID-', enable_events=True)], 
+         sg.Slider((1, 160), size=(10,10), default_value=1, key='-BATCH-', orientation='horizontal', enable_events=True),
+         sg.Checkbox("Show filtered Video", key='-FILTVID-', enable_events=True)], 
         [sg.Push(), sg.Canvas(key='-CANVAS-',pad=(0,0)), sg.Push()]
     ]
     
@@ -168,8 +174,12 @@ def window_layout():
     ]
 
     DRA = [
-        [sg.Column([[sg.Text('FPN correction mode')],[sg.Combo(['DRA_PN', 'cpFPNc', 'mFPNc', 'wFPNc', 'fFPNc'], key='-FPNc-', default_value='DRA_PN', size=(10), enable_events=True, readonly=True)],[sg.Button('DRA Filtering')]],vertical_alignment='top'),
-         sg.Column([[sg.Text('Batch Size')], [sg.Input(default_text='1', size=(10), key='-BATCH_IN-', enable_events=True)], [sg.Button('Find Optimal Batch Size')]],vertical_alignment='top')]
+        [sg.Column([[sg.Text('FPN correction mode')],
+                    [sg.Combo(['DRA_PN', 'cpFPNc', 'mFPNc', 'wFPNc', 'fFPNc'], key='-FPNc-', default_value='DRA_PN', size=(10), enable_events=True, readonly=True)],
+                    [sg.Button('DRA Filtering')]],vertical_alignment='top'),
+         sg.Column([[sg.Text('Batch Size')], 
+                    [sg.Input(default_text='1', size=(10), key='-BATCH_IN-', enable_events=True)], 
+                    [sg.Button('Find Optimal Batch Size')]],vertical_alignment='top')]
     ]
 
     piscat_preprocessing = [
@@ -211,20 +221,38 @@ def CPU_window_layout():
     ]
 
     right_column = [
-        [sg.Input(default_text='-1', size=(20), key='-N_JOBS-')],
-        [sg.Input(default_text='10', size=(20), key='-VERBOS-')],
-        [sg.Combo(['loky', 'threading'], key='-BACKEND-', default_value='loky', size=(20), enable_events=True, readonly=True)]
+        [sg.Input(default_text=n_jobs, size=(20), key='-N_JOBS-')],
+        [sg.Input(default_text=verbose, size=(20), key='-VERBOSE-')],
+        [sg.Combo(['loky', 'threading'], key='-BACKEND-', default_value=backend, size=(20), enable_events=True, readonly=True)]
     ]
 
     CPU_layout = [
-        [sg.Checkbox('Enable Parallel Computing', key='-PARALLEL-', default=True, enable_events=True)],
+        [sg.Checkbox('Enable Parallel Computing', key='-PARALLEL-', default = parallel_active, enable_events=True)],
         [sg.Checkbox('Show the CPU Settings', key='-FLAG-', default=True, enable_events=True)],
         [sg.Column(left_column),sg.Column(right_column)],
-        [sg.Button('Submit')]
+        [sg.Button('Submit')],
+        [sg.Frame("Description", [[sg.Text('You can choose the number of consecutive workers\n by changing the value for the Number of Cores.\n If the value is -1, all available cores are used.')],
+                                  [sg.Text('Verbosity Level gives the amount of output\n in the Terminal while the process is running.\n If it is above 10 everything is shown')],
+                                  [sg.Text('Parallel Method is adiviced to be set to loky for\n faster processing and higher stability')],
+                                  [sg.Text('Show CPU Settings will produce an output with\n the containment of the JSON config file')],
+                                  [sg.Text('ATTENTION!\n If the JSON file is not changed after Submission,\n a restart of the IDE might help')]], expand_x=True, expand_y=True)]
+
     ]
-    cpu_window =  sg.Window('CPU Configuration for Parallel Computing', CPU_layout, size=(300,300), resizable=True, finalize=True)
+    cpu_window =  sg.Window('CPU Configuration for Parallel Computing', CPU_layout, size=(300,380), resizable=True, finalize=True)
 
     return cpu_window
+
+def Inlay_scaling_layout():
+
+    Inlay_layout = [
+        [sg.Text('The size for graphical inlays such as videos or plots might differ, depending on the computer. \n This menu allows you to change the scaling factor \n The standard value 1 is optimized for Mac, on Windows machines 2 should be sufficient')],
+        [sg.Push(), sg.Text('Scaling facor:'), sg.Combo(['1', '1.5', '2', '2.5', '3'], key='-SCALING-', default_value='1', size=(10), enable_events = True, readonly=True), sg.Push()],
+        [sg.Push(), sg.Button('Submit', key='-SUB_SCALE-'), sg.Push()]
+    ]
+
+    scaling_window = sg.Window('Scaling Configuration', Inlay_layout, size=(500,100), resizable=True, finalize=True)
+
+    return scaling_window
 
 window = window_layout()
 
@@ -242,8 +270,8 @@ if full_path_dark:
 #initialize the figures for the canvas inside the GUI
 px = 1/plt.rcParams['figure.dpi']  # pixel in inches
 
-fig, ax = plt.subplots(1,1,constrained_layout=True, figsize=(250*px,250*px)) #Change the Inset to the canvas her, it depends on the computer you are using it
-fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(10,5))
+fig, ax = plt.subplots(1,1,constrained_layout=True, figsize=(250*px,250*px)) #Change the Inset to the canvas here, it depends on the computer you are using it on
+fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(500*px,250*px))
 canvas_elem = window['-CANVAS-']
 canvas_elem_pn = window['-PNCANV-']
 
@@ -265,25 +293,93 @@ batchSize_in = 30
 
 #%%#######################--------MAIN--------###########################
 
-# Event loop
+# Event loop (Main window)
 while True:
 
     # reads the input values of the GUI
     event, values = window.read(timeout=5)
     # reads the slider values for the batch size of the differential view in the video preview field
 
-
+#---------------------------------------------------------
     # Opens window for CPU Options
     if event == 'CPU Configuration':
         cpu_window = CPU_window_layout()
-        event2, value2 = cpu_window.read(timeout=100)
+        
+        while True:
 
-        if event == sg.WINDOW_CLOSED:
-            break
+            event2, value2 = cpu_window.read(timeout=10)
 
+            if event2 == sg.WINDOW_CLOSED:
+                break
+            
+            elif event2 == 'Submit':
 
+                # Enable parallel computing yes or no
+                if value2['-PARALLEL-'] == False:
+                    parallel_active = False
+                elif value2['-PARALLEL-'] == True:
+                    parallel_active = True
 
+                # Show the saved settings from the config file
+                if value2['-FLAG-'] == True:
+                    cpu_set_flag = True
+                elif value2['-FLAG-'] == False:
+                    cpu_set_flag = True
 
+                # Choose the type of parallel computing (There is also multiprocessing,
+                # but it does not work with piscat and I could not solve the problem yet.
+                # However loky should be the better choice anyways, as it is more stabel)
+                if value2['-BACKEND-'] == 'loky':
+                    backend = 'loky'
+                elif value2['-BACKEND-'] == 'threading':
+                    backend = 'threading'
+
+                n_jobs = int(value2['-N_JOBS-'])
+                verbose = int(value2['-VERBOSE-'])
+
+                delete_CPU_config()
+                cpu_settings = CPUConfigurations(n_jobs=n_jobs, verbose=verbose, backend=backend, parallel_active=parallel_active, flag_report=cpu_set_flag)
+
+#---------------------------------------------------------
+    # Open Window for adjusting the scale of the canvas 
+
+    if event == 'Inlay Scaling':
+        scaling_window = Inlay_scaling_layout()
+        
+        while True:
+
+            event3, value3 = scaling_window.read(timeout=10)
+
+            if event3 == sg.WINDOW_CLOSED:
+                break
+            
+            elif event3 == '-SUB_SCALE-':
+
+                if value3['-SCALING-'] == '1':
+                    pxu = px*1
+                elif value3['-SCALING-'] == '1.5':
+                    pxu = px*1.5
+                elif value3['-SCALING-'] == '2':
+                    pxu = px*2
+                elif value3['-SCALING-'] == '2.5':
+                    pxu = px*2.5
+                elif value3['-SCALING-'] == '3':
+                    pxu = px*3
+
+    
+                fig, ax = plt.subplots(1,1,constrained_layout=True, figsize=(250*pxu,250*pxu)) #Change the Inset to the canvas here, it depends on the computer you are using it on
+                fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(500*pxu,250*pxu))
+                ax.clear()
+                im = ax.imshow(decoy_img, cmap='gray', vmin=0, vmax=255)
+                ax.axis('off')
+                draw_figure(canvas_elem, fig)
+
+                print(f'Changed Inlay Scaling to: {pxu}')
+
+                scaling_window.close()
+
+#---------------------------------------------------------
+# Main window again
 
     if event == sg.WINDOW_CLOSED:
         break
@@ -494,6 +590,8 @@ while True:
             print(f'Please select a video first')
 
 window.close()
+cpu_window.close()
+scaling_window.close()
 
 # variables for Terminal output
 sys.stdout = sys.__stdout__

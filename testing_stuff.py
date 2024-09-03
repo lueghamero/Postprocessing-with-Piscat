@@ -29,17 +29,21 @@ video_data = np.load(filename)
 
 video_pn, power_fluctuation = Normalization(video=video_data).power_normalized()
 
-video_dr = DifferentialRollingAverage(video=video_pn, batchSize=30, mode_FPN='mFPN')
+video_dr = DifferentialRollingAverage(video=video_pn, batchSize=30, mode_FPN='fFPN')
 video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
 
 PSF = PSFsExtraction(video = video_dra ,flag_transform = True, flag_GUI = True)
 
 df_PSFs = PSF.psf_detection(function='dog',  
-                          min_sigma=5, max_sigma=8, sigma_ratio=1.5, threshold=8e-2,
+                          min_sigma=3, max_sigma=8, sigma_ratio=1.5, threshold=2e-3,
                           overlap=0, mode='BOTH')
-                        
+
 
 print(df_PSFs)
+
+display_psf = DisplayDataFramePSFsLocalization(video_dra, df_PSFs, 0.1, False).show_psf(display_history=False)
+
+#PSFshow = PSF.psf_detection_preview(function='dog', min_sigma=1, max_sigma=8, sigma_ratio=1.5, threshold=0.00008, overlap=0, mode='BOTH', frame_number=100, IntSlider_width='400px')
 
 
 

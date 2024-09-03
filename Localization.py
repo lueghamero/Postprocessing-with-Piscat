@@ -24,17 +24,11 @@ Display(dra_video, time_delay=50)
 n = np.shape(dra_video)[0]
 frame_number = list(range(1, n))
 
-# PSF = PSFsExtraction(video = dra_video ,flag_transform = True, flag_GUI = True)
+PSF = PSFsExtraction(video = dra_video ,flag_transform = True, flag_GUI = False)
 
-<<<<<<< HEAD
 df_PSFs = PSF.psf_detection(function='dog',  
                           min_sigma=5, max_sigma=8, sigma_ratio=1.5, threshold=8e-2,
                           overlap=0, mode='BOTH', frame_number = frame_number)
-=======
-#df_PSFs = PSF.psf_detection_preview(function='dog',  
- #                          min_sigma=5, max_sigma=8, sigma_ratio=1.5, threshold=8e-2,
-   #                       overlap=0, mode='BOTH', frame_number = frame_number)
->>>>>>> 40e5873a1470dd98ed8d517ba413e483e9cb92c1
                         
 
 # print(df_PSFs)
