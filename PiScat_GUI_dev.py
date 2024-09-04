@@ -43,7 +43,7 @@ def update_figure(image_data, im, colorbar):
     if colorbar:
         colorbar.update_normal(im)
     
-    im.axes.figure.canvas.draw_idle()
+    im.axes.figure.canvas.draw_idle() # THIS THING is responsible for a proper frame advancement
 
 
 #create a folder for the config file, in which saves such as the filepath to the video is stored
@@ -179,7 +179,7 @@ def window_layout():
         [sg.Checkbox('Show only .npy files', key='-SHOW_NPY-', default=initial_show_only_npy, enable_events=True)],
         [sg.Listbox(values=initial_file_list1, size=(60, 10), key='-FILELIST-', auto_size_text=True, enable_events=True, select_mode=sg.LISTBOX_SELECT_MODE_SINGLE)],
         [sg.Button("Read Video"), sg.Button("Crop seleceted Video"), sg.Button("Select as Darkframe Video"),
-          sg.OptionMenu(["Enable Video Player: NO", "Enable Video Player: YES"], default_value = "Enable Video Player: NO", key = '-PLAY OPTION-', background_color='lightgrey', text_color='black')]
+          sg.OptionMenu(["Enable Video Player: NO", "Enable Video Player: YES"], default_value = "Enable Video Player: NO", key = '-PLAY OPTION-', background_color='lightblue', text_color='black')]
     ]
 
     vid_play = [
@@ -188,7 +188,9 @@ def window_layout():
          sg.Button('Next Frame'), sg.Button('Reset',key='-RESET-')], 
         [sg.Checkbox("Differential View", key='-DIFF-', enable_events=True), sg.Text('Batch Size:', size=(10,1)), 
          sg.Slider((1, 160), size=(10,10), default_value=1, key='-BATCH-', orientation='horizontal', enable_events=True),
-         sg.Checkbox("Show filtered Video", key='-FILTVID-', enable_events=True)], 
+         sg.VerticalSeparator(),
+         sg.Checkbox("Show filtered Video", key='-FILTVID-', enable_events=True),
+         sg.Checkbox("Show PSFs", key='-SHOW_PSF-', enable_events=True)], 
         [sg.Push(), sg.Canvas(key='-CANVAS-',pad=(0,0)), sg.Push()]
     ]
     
@@ -226,10 +228,10 @@ def window_layout():
 
     psf_detection_input_values_dog = [
         [sg.Text('Frame Number'), sg.Push(), sg.Slider(range=(1,1000), size=(20,10), orientation='h', key='-FNPSF-', enable_events=True, disabled=True)],
-        [sg.Text('Sigma min'), sg.Push(), sg.Slider(range=(1,5), size=(20,10), tick_interval = 0.5, orientation='h', key='-SMIN-', enable_events=True)],
-        [sg.Text('Sigma max'), sg.Push(), sg.Slider(range=(1,10), size=(20,10), tick_interval = 0.5, orientation='h', key='-SMAX-', enable_events=True)],
-        [sg.Text('Sigma ratio'), sg.Push(), sg.Slider(range=(1,3), size=(20,10), tick_interval = 0.1, orientation='h', key='-SSTEP-', enable_events=True)],
-        [sg.Text('Threshold'), sg.Push(), sg.Slider(range=(1e-4,1e-2), size=(20,10), tick_interval=1e-4, orientation='h', key='-STHRESH-', enable_events=True)],
+        [sg.Text('Sigma min'), sg.Push(), sg.Slider(range=(1,5), size=(20,10), resolution = 0.5, orientation='h', key='-SMIN-', enable_events=True)],
+        [sg.Text('Sigma max'), sg.Push(), sg.Slider(range=(1,10), size=(20,10), resolution = 0.5, orientation='h', key='-SMAX-', enable_events=True)],
+        [sg.Text('Sigma ratio'), sg.Push(), sg.Slider(range=(1,3), size=(20,10), resolution = 0.1, orientation='h', key='-SSTEP-', enable_events=True)],
+        [sg.Text('Threshold'), sg.Push(), sg.Slider(range=(1e-4,1e-2), size=(20,10), resolution= 1e-4, orientation='h', key='-STHRESH-', enable_events=True)],
     ]
 
     psf_detection_input_values_rvt = [
@@ -238,9 +240,8 @@ def window_layout():
 
     piscat_psf_detection = [ 
         [sg.Text('Filtering Mode:')],
-        [sg.Combo(['DOG', 'LOG', 'DOH', 'RVT'], key='-PSF_MODE-', default_value='DOH', enable_events=True, readonly=True)],
-        [sg.Column(psf_detection_input_values_dog, vertical_alignment='top'),sg.VerticalSeparator(),sg.Column(psf_detection_input_values_rvt)]   
-
+        [sg.Combo(['DOG', 'LOG', 'DOH', 'RVT'], key='-PSF_MODE-', default_value='DOH', enable_events=True, size=(20,10),readonly=True)],
+        [sg.Column(psf_detection_input_values_dog, vertical_alignment='top'),sg.VerticalSeparator(),sg.Column(psf_detection_input_values_rvt)],  
     ]
 
     tab_layout = [
@@ -353,6 +354,7 @@ if full_path_dark:
 px = 1/plt.rcParams['figure.dpi']  # pixel in inches
 
 fig, ax = plt.subplots()
+fig.patch.set_facecolor(color = 'lightblue')
 fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(500*px,250*px))
 canvas_elem = window['-CANVAS-']
 canvas_elem_pn = window['-PNCANV-']
@@ -360,12 +362,14 @@ canvas_elem_pn = window['-PNCANV-']
 decoy_img = np.linspace(0, 255, 256*256).reshape(256, 256)
 
 im = ax.imshow(decoy_img)
+ax.axis(False)
 canvas = draw_figure(canvas_elem, fig)
 
 i=0
 full_path = None
 video_data = None
 video_pn = None
+video_dra = None
 playing = False
 colorbar = None
 im = None
@@ -561,21 +565,36 @@ while True:
     
 
     elif values['-PLAY OPTION-'] == "Enable Video Player: YES":
-        if video_data is not None:
+        if video_data is not None or video_dra is not None:
             # checkbox for differential view
             if values['-DIFF-'] == True:
                 frame = differential_view(video_data, frame_index, batchSize)
                 frame = frame/np.max(frame)
             elif values['-FILTVID-'] == True:
-                frame = video_dra[frame_index, :, :]
-                frame = frame/np.max(frame)
-                vid_len = video_dra.shape[0]
-                window['-FRNR-'].update(range=(1, vid_len) ,disabled=False)
+                if video_dra is None:
+                    print(f'Filtered video is not yet in memory! Please process first!')
+                    window['-FILTVID-'].update(False) 
+                    continue
+                else:
+                    frame = video_dra[frame_index, :, :]
+                    frame = frame/np.max(frame)
+                    vid_len = video_dra.shape[0]
+                    window['-FRNR-'].update(range=(1, vid_len) ,disabled=False)
             else:
                 frame = video_data[frame_index, :, :]
                 frame = frame/np.max(frame)
                 vid_len = video_data.shape[0]
                 window['-FRNR-'].update(range=(1, vid_len) ,disabled=False)
+
+            if values['-SHOW_PSF-'] == True:
+                if video_dra is None:
+                    print(f'Filtered video is not yet in memory! Please process first!')
+                    window['-FILTVID-'].update(False) 
+                    continue
+                else:
+                    frame = video_dra[frame_index, :, :]
+                    PSF = PSFsExtraction(video = frame ,flag_transform = True)
+
 
             # reset the frame_index advancement
             if event == '-RESET-':
@@ -619,7 +638,14 @@ while True:
                     
             # Draw or update the figure on the canvas
             canvas = draw_figure(window['-CANVAS-'], fig, canvas)
-            
+
+
+
+        else:
+            print(f'No video for playing in memory')
+            window['-PLAY OPTION-'].Update("Enable Video Player: NO")
+            continue
+
     elif event == '-BATCH_IN-':
         try:
             batchSize_in = int(values['-BATCH_IN-'])
@@ -699,24 +725,23 @@ while True:
 
             if values['-FPNc-'] == 'DRA_PN':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in)
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=parallel_active)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
             elif values['-FPNc-'] == 'cpFPNc':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='cpFPN')
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=parallel_active)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
             elif values['-FPNc-'] == 'mFPNc':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='mFPN')
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=parallel_active)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
             elif values['-FPNc-'] == 'wFPNc':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='wFPN')
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=parallel_active)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
             elif values['-FPNc-'] == 'fFPNc':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='fFPN')
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=parallel_active)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
         
         else:
             print(f'Please select a video first')
 
-fig_agg.draw()
 window.close()
 cpu_window.close()
 scaling_window.close()
