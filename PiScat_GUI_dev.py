@@ -15,19 +15,35 @@ from piscat.BackgroundCorrection import *
 from piscat.InputOutput import *
 from piscat.Localization import *
 
-psf = particle_localization.PSFsExtraction
 
 #%%##################--------FUNCTIONS--------########################
 
 
 # creates the figure canvas for the GUI
-def draw_figure(canvas_elem, figure):
-    """Draw a Matplotlib figure on a Tkinter canvas."""
-    for widget in canvas_elem.Widget.winfo_children():
-        widget.destroy()
-    canvas = FigureCanvasTkAgg(figure, master=canvas_elem.Widget)
-    canvas.draw()
-    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+def draw_figure(canvas_elem, figure, canvas=None):
+    
+    if canvas is None:
+        # If no canvas exists, create a new one
+        canvas = FigureCanvasTkAgg(figure, master=canvas_elem.Widget)
+        canvas.draw()
+        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+    else:
+        # If the canvas already exists, just update the drawing
+        canvas.draw_idle()
+    return canvas
+
+# updates figure canvas
+def update_figure(image_data, im, colorbar):
+    
+    im.set_data(image_data)  # Update the image data
+    
+    # Auto-scale the image to its new data range
+    im.set_clim(vmin=np.min(image_data), vmax=np.max(image_data))
+    
+    if colorbar:
+        colorbar.update_normal(im)
+    
+    im.axes.figure.canvas.draw_idle()
 
 
 #create a folder for the config file, in which saves such as the filepath to the video is stored
@@ -106,6 +122,20 @@ def delete_CPU_config():
             print(f"Error: {filepath} : {e.strerror}")
     else:
         print(f"Configuration file {filepath} does not exist.")
+
+
+def save_video_in_path(video_data ,input_filepath, output_folder, suffix):
+
+    og_filename = os.path.basename(input_filepath)
+    filename_without_ext, ext = os.path.splitext(og_filename)
+
+    new_filename = f'{filename_without_ext}_{suffix}{ext}'
+
+    output_filepath = os.path.join(output_folder, new_filename)
+
+    np.save(output_filepath, video_data)
+
+    print(f'{suffix} video has been saved as {output_filepath}')
 
 
 
@@ -190,13 +220,26 @@ def window_layout():
     ]
 
     piscat_preprocessing = [
-            [sg.Column(power_normalization_df_correction, vertical_alignment='top'), sg.VerticalSeparator(), sg.Column(DRA, vertical_alignment='top')],
-            [sg.Canvas(key='-PNCANV-', pad=(0,0), size=(1000,520))]    
+        [sg.Column(power_normalization_df_correction, vertical_alignment='top'), sg.VerticalSeparator(), sg.Column(DRA, vertical_alignment='top')],
+        [sg.Canvas(key='-PNCANV-', pad=(0,0), size=(1000,520))]    
+    ]
+
+    psf_detection_input_values_dog = [
+        [sg.Text('Frame Number'), sg.Push(), sg.Slider(range=(1,1000), size=(20,10), orientation='h', key='-FNPSF-', enable_events=True, disabled=True)],
+        [sg.Text('Sigma min'), sg.Push(), sg.Slider(range=(1,5), size=(20,10), tick_interval = 0.5, orientation='h', key='-SMIN-', enable_events=True)],
+        [sg.Text('Sigma max'), sg.Push(), sg.Slider(range=(1,10), size=(20,10), tick_interval = 0.5, orientation='h', key='-SMAX-', enable_events=True)],
+        [sg.Text('Sigma ratio'), sg.Push(), sg.Slider(range=(1,3), size=(20,10), tick_interval = 0.1, orientation='h', key='-SSTEP-', enable_events=True)],
+        [sg.Text('Threshold'), sg.Push(), sg.Slider(range=(1e-4,1e-2), size=(20,10), tick_interval=1e-4, orientation='h', key='-STHRESH-', enable_events=True)],
+    ]
+
+    psf_detection_input_values_rvt = [
+
     ]
 
     piscat_psf_detection = [ 
         [sg.Text('Filtering Mode:')],
-        [sg.Combo(['DOG', 'LOG', 'DOH', 'RVT'], key='-PSF_MODE-', default_value='DOH', enable_events=True, readonly=True)]   
+        [sg.Combo(['DOG', 'LOG', 'DOH', 'RVT'], key='-PSF_MODE-', default_value='DOH', enable_events=True, readonly=True)],
+        [sg.Column(psf_detection_input_values_dog, vertical_alignment='top'),sg.VerticalSeparator(),sg.Column(psf_detection_input_values_rvt)]   
 
     ]
 
@@ -309,26 +352,24 @@ if full_path_dark:
 #initialize the figures for the canvas inside the GUI
 px = 1/plt.rcParams['figure.dpi']  # pixel in inches
 
-fig, ax = plt.subplots(1,1,constrained_layout=True, figsize=(250*px,250*px)) #Change the Inset to the canvas here, it depends on the computer you are using it on
+fig, ax = plt.subplots()
 fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(500*px,250*px))
 canvas_elem = window['-CANVAS-']
 canvas_elem_pn = window['-PNCANV-']
 
 decoy_img = np.linspace(0, 255, 256*256).reshape(256, 256)
 
-ax.clear()
-im = ax.imshow(decoy_img, cmap='gray', vmin=0, vmax=255)
-ax.axis('off')
-draw_figure(canvas_elem, fig)
+im = ax.imshow(decoy_img)
+canvas = draw_figure(canvas_elem, fig)
 
 i=0
 full_path = None
 video_data = None
 video_pn = None
 playing = False
-im = None
 colorbar = None
-batchSize_in = 30
+im = None
+
 
 #%%#######################--------MAIN--------###########################
 
@@ -433,25 +474,30 @@ while True:
                 saving_folder = value4['-SAVING_FOLDER-']
                 save_file_paths(folder, full_path_dark, saving_folder, PSF_folder) 
 
-
             elif event4 == 'Save Video Data':
 
                 if value4['-SAVE_PN-'] == True:
                     if video_pn is not None:
                         if value4['-DELETE_VID-'] == False:
-                            np.save(saving_folder, video_pn)
+                            save_video_in_path(video_pn, full_path, saving_folder, suffix='power_normalized')
                             video_pn = None
                         else:
-                            np.save(saving_folder, video_pn)
+                            save_video_in_path(video_pn, full_path, saving_folder, suffix='power_normalized')
                     else:
                         print(f'There is no Power Normalized Video in the Memory')
 
 
-                if value4['-SAVE_DRA-']:
+                if value4['-SAVE_DRA-'] == True:
+                    if video_dra is not None:
+                        if value4['-DELETE_VID-'] == False:
+                            save_video_in_path(video_dra, full_path, saving_folder, suffix='DRA_filtered')
+                            video_dra = None
+                        else:
+                            save_video_in_path(video_dra, full_path, saving_folder, suffix='DRA_filtered')
+                    else:
+                        print(f'There is no DRA Filtered Video in the Memory')
                     pass
 
-
-                
 
 #---------------------------------------------------------
 # Main window again
@@ -471,7 +517,7 @@ while True:
         show_only_npy = values['-SHOW_NPY-']
         file_list = list_files_in_folder(folder, show_only_npy)
         window['-FILELIST-'].update(file_list)
-        save_file_paths(folder, full_path_dark)  # Save the selected folder path
+        save_file_paths(folder, full_path_dark, saving_folder, PSF_folder)  # Save the selected folder path
 
     # checkbox event for only showing .npy files
     elif event == '-SHOW_NPY-': # Only show .npy files
@@ -507,7 +553,7 @@ while True:
         selected_file_dark = values['-FILELIST-'][0] if values['-FILELIST-'] else None
         if selected_file_dark:
             full_path_dark = os.path.join(folder, selected_file_dark)
-            save_file_paths(folder, full_path_dark)
+            save_file_paths(folder, full_path_dark, saving_folder, PSF_folder)
             dark_frame_video = np.load(full_path_dark)
             print(f'Loaded {full_path_dark} as darkframe video')
         else:
@@ -524,10 +570,12 @@ while True:
                 frame = video_dra[frame_index, :, :]
                 frame = frame/np.max(frame)
                 vid_len = video_dra.shape[0]
+                window['-FRNR-'].update(range=(1, vid_len) ,disabled=False)
             else:
                 frame = video_data[frame_index, :, :]
                 frame = frame/np.max(frame)
                 vid_len = video_data.shape[0]
+                window['-FRNR-'].update(range=(1, vid_len) ,disabled=False)
 
             # reset the frame_index advancement
             if event == '-RESET-':
@@ -556,18 +604,22 @@ while True:
                 frame_index = (frame_index + 1) % vid_len
                 window['-FRNR-'].update(frame_index + 1)
                 
-            # create figure for the vide preview
-            ax.clear()
-            im = ax.imshow(frame, cmap='viridis')
-            if colorbar is None:
+            if im is None:
+                # If it's the first frame, create the image and colorbar
+                im = ax.imshow(frame, cmap='viridis')
+                ax.set_title(f'Frame Number {frame_index + 1}')
+                ax.axis('off')
                 colorbar = fig.colorbar(im, ax=ax, shrink=0.7)
                 colorbar.ax.tick_params(labelsize=5)
+                fig.tight_layout()
             else:
-                colorbar.update_normal(im)
-            ax.set_title(f'Frame Number {frame_index + 1}')
-            ax.axis('off')
-            draw_figure(canvas_elem, fig)  # Draw the updated figure
-
+                # Update the image data on subsequent frames
+                ax.set_title(f'Frame Number {frame_index + 1}')
+                update_figure(frame, im, colorbar)
+                    
+            # Draw or update the figure on the canvas
+            canvas = draw_figure(window['-CANVAS-'], fig, canvas)
+            
     elif event == '-BATCH_IN-':
         try:
             batchSize_in = int(values['-BATCH_IN-'])
@@ -647,23 +699,24 @@ while True:
 
             if values['-FPNc-'] == 'DRA_PN':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in)
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=parallel_active)
             elif values['-FPNc-'] == 'cpFPNc':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='cpFPN')
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=parallel_active)
             elif values['-FPNc-'] == 'mFPNc':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='mFPN')
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=parallel_active)
             elif values['-FPNc-'] == 'wFPNc':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='wFPN')
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=parallel_active)
             elif values['-FPNc-'] == 'fFPNc':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='fFPN')
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=parallel_active)
         
         else:
             print(f'Please select a video first')
 
+fig_agg.draw()
 window.close()
 cpu_window.close()
 scaling_window.close()
