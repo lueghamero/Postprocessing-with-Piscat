@@ -14,6 +14,7 @@ from piscat.Localization import *
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
 import cv2
+from PSF_localization_preview import *
 
 filename = sg.popup_get_file('Filename to play')
 #filename = r"C:\Users\Emanuel\Desktop\Masterarbeit\2024_02_27_data\12_59_32_Sample1_Refrence_Air.npy"
@@ -25,6 +26,7 @@ filename_folder = os.path.dirname(filename)
 filename_measurement = os.path.splitext(os.path.basename(filename))[0]
 
 video_data = np.load(filename)
+video_data = video_data[0:100,:,:]
 #video_data = np.transpose(video_data, (1, 2, 0))
 
 video_pn, power_fluctuation = Normalization(video=video_data).power_normalized()
@@ -32,16 +34,29 @@ video_pn, power_fluctuation = Normalization(video=video_data).power_normalized()
 video_dr = DifferentialRollingAverage(video=video_pn, batchSize=30, mode_FPN='fFPN')
 video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
 
-PSF = PSFsExtraction(video = video_dra ,flag_transform = True, flag_GUI = True)
+# Assume 'video' is your video array and has shape (num_frames, height, width)
 
-df_PSFs = PSF.psf_detection(function='dog',  
-                          min_sigma=3, max_sigma=8, sigma_ratio=1.5, threshold=2e-3,
-                          overlap=0, mode='BOTH')
+psf_preview = PSFsExtractionPreview(video_dra.shape[1:])
 
+# Get a single frame from the video
+frame_index = 0
+frame = video_dra[frame_index]
 
-print(df_PSFs)
+# Detect PSFs in the frame
+psf_positions = psf_preview.psf_detection(frame, frame_index, function='dog')
 
-display_psf = DisplayDataFramePSFsLocalization(video_dra, df_PSFs, 0.1, False).show_psf(display_history=False)
+print(psf_positions)
+print(len(psf_positions[:,1:3]))
+# Plot the frame and the red circles for detected PSFs
+fig, ax = plt.subplots()
+ax.imshow(frame, cmap='gray')
+
+# Add red circles to the detected PSF positions
+psf_preview.create_red_circles(psf_positions, ax, radius=8)
+
+# Display the result
+plt.show()
+
 
 #PSFshow = PSF.psf_detection_preview(function='dog', min_sigma=1, max_sigma=8, sigma_ratio=1.5, threshold=0.00008, overlap=0, mode='BOTH', frame_number=100, IntSlider_width='400px')
 
