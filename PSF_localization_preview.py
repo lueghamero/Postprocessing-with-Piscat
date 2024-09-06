@@ -47,8 +47,8 @@ class PSFsExtractionPreview:
         self.function = None
 
         self.df_PSF = None
+        self.min_distance = None
 
-        self.min_distance = kwargs.get("min_distance", 10)
 
     @Slot()
     def run(self):
@@ -141,6 +141,7 @@ class PSFsExtractionPreview:
         self.beta = kwargs.get('beta', 1)
         self.stdFactor = kwargs.get('stdFactor', 1)
         self.mode = kwargs.get('mode', "BOTH")
+        self.min_distance = kwargs.get("min_distance", 10)
         self.function = function
 
         # Detect PSFs in the current frame
@@ -201,17 +202,7 @@ class PSFsExtractionPreview:
     
 
     def filter_adjacent_blobs(self, blobs, min_distance=None):
-        """
-        Filters out adjacent blobs that are closer than the specified minimum distance,
-        retaining the one with the highest intensity or sigma value.
 
-        Args:
-            blobs (ndarray): Array of PSF positions in the format [frame_num, y, x, sigma].
-            min_distance (float): The minimum distance allowed between blobs. Blobs closer than this will be filtered out.
-
-        Returns:
-            ndarray: Array of filtered PSF positions with adjacent blobs removed.
-        """
         if blobs is None or len(blobs) == 0:
             return blobs
 
@@ -267,16 +258,7 @@ class PSFsExtractionPreview:
         return temp2
 
     def create_red_circles(self, psf_positions, ax, radius=5):
-        """Create red circles for each PSF position and add them to the given axis (ax).
 
-        Args:
-            psf_positions (ndarray): Array of PSF positions with columns [frame_num, y, x, sigma].
-            ax (matplotlib.axes.Axes): The matplotlib axis to add the circles to.
-            radius (float): The radius of the circles to be drawn. Default is 5.
-
-        Returns:
-            list: A list of matplotlib.patches.Circle objects that can be added to the ax figure.
-        """
         circles = []
         for psf in psf_positions:
             # PSF positions are assumed to be in the format [frame_num, y, x, sigma]

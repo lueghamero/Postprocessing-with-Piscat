@@ -16,6 +16,7 @@ from piscat.Preproccessing import *
 from piscat.BackgroundCorrection import *
 from piscat.InputOutput import *
 from piscat.Localization import *
+
 from PSF_localization_preview import *
 
 
@@ -35,18 +36,46 @@ def draw_figure(canvas_elem, figure, canvas=None):
         canvas.draw_idle()
     return canvas
 
-# updates figure canvas
-def update_figure(image_data, im, colorbar):
-    
-    im.set_data(image_data)  # Update the image data
+def draw_figure_plot(canvas_elem, figure):
+
+    for widget in canvas_elem.Widget.winfo_children():
+        widget.destroy()
+    canvas = FigureCanvasTkAgg(figure, master=canvas_elem.Widget)
+    canvas.draw()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
+def update_figure(image_data, im, colorbar, psf_positions=None, psf_extractor=None, radius=5):
+    """
+    Updates the matplotlib figure with new image data and optional PSF circles.
+
+    Args:
+        image_data (ndarray): The new image data to display.
+        im (matplotlib.image.AxesImage): The image handle to update.
+        colorbar (matplotlib.colorbar.Colorbar): The colorbar to update (if present).
+        psf_positions (ndarray): Optional, array of PSF positions with columns [frame_num, y, x, sigma].
+        psf_extractor (PSFsExtractionPreview): Instance of PSF extraction class for generating red circles.
+        radius (float): The radius of the red circles to be drawn.
+    """
+    # Clear previous circles if any
+    for artist in im.axes.artists:
+        artist.remove()  # Remove all previously drawn circles
+
+    # Update the image data
+    im.set_data(image_data)
     
     # Auto-scale the image to its new data range
     im.set_clim(vmin=np.min(image_data), vmax=np.max(image_data))
     
     if colorbar:
         colorbar.update_normal(im)
-    
-    im.axes.figure.canvas.draw_idle() # THIS THING is responsible for a proper frame advancement
+
+    # If PSF positions are provided, create red circles
+    if psf_positions is not None and psf_extractor is not None:
+        psf_extractor.create_red_circles(psf_positions, im.axes, radius=radius)
+
+    # Redraw the updated figure
+    im.axes.figure.canvas.draw_idle()
+
 
 
 #create a folder for the config file, in which saves such as the filepath to the video is stored
@@ -230,20 +259,22 @@ def window_layout():
     ]
 
     psf_detection_input_values_dog = [
-        [sg.Text('Frame Number'), sg.Push(), sg.Slider(range=(1,1000), size=(20,10), orientation='h', key='-FNPSF-', enable_events=True, disabled=True)],
-        [sg.Text('Sigma min'), sg.Push(), sg.Slider(range=(1,5), size=(20,10), resolution = 0.5, orientation='h', key='-SMIN-', enable_events=True)],
-        [sg.Text('Sigma max'), sg.Push(), sg.Slider(range=(1,10), size=(20,10), resolution = 0.5, orientation='h', key='-SMAX-', enable_events=True)],
-        [sg.Text('Sigma ratio'), sg.Push(), sg.Slider(range=(1,3), size=(20,10), resolution = 0.1, orientation='h', key='-SSTEP-', enable_events=True)],
-        [sg.Text('Threshold'), sg.Push(), sg.Slider(range=(1e-4,1e-2), size=(20,10), resolution= 1e-4, orientation='h', key='-STHRESH-', enable_events=True)],
+        [sg.Text('Sigma min'), sg.Push(), sg.Slider(range=(1,5), size=(20,10), resolution = 0.5, default_value=1, orientation='h', key='-SMIN-', enable_events=True)],
+        [sg.Text('Sigma max'), sg.Push(), sg.Slider(range=(1,10), size=(20,10), resolution = 0.5, default_value=5, orientation='h', key='-SMAX-', enable_events=True)],
+        [sg.Text('Sigma ratio'), sg.Push(), sg.Slider(range=(1.1,3), size=(20,10), resolution = 0.1, default_value = 1.1, orientation='h', key='-SSTEP-', enable_events=True)],
+        [sg.Text('Threshold'), sg.Push(), sg.Slider(range=(1e-4,1e-2), size=(20,10), resolution= 1e-4, default_value = 5e-3, orientation='h', key='-STHRESH-', enable_events=True)],
+        [sg.Text('Min Radius'), sg.Push(), sg.Slider(range=(1,50), size=(20,10), resolution= 1, default_value=15, orientation='h', key='-MINRAD-', enable_events=True)],
     ]
 
     psf_detection_input_values_rvt = [
 
     ]
 
-    piscat_psf_detection = [ 
-        [sg.Text('Filtering Mode:')],
-        [sg.Combo(['DOG', 'LOG', 'DOH', 'RVT'], key='-PSF_MODE-', default_value='DOH', enable_events=True, size=(20,10),readonly=True)],
+    piscat_psf_detection = [
+        [sg.Column([ 
+         [sg.Text('Filtering Mode:')],
+         [sg.Combo(['DOG', 'LOG', 'DOH', 'RVT'], key='-PSF_MODE-', default_value='DOG', enable_events=True, size=(20,10),readonly=True)]]),
+        sg.Column([[sg.Button('Show PSF Preview')],[sg.Checkbox('PSF Preview', key='-PSFPV-', enable_events=True)]])],
         [sg.Column(psf_detection_input_values_dog, vertical_alignment='top'),sg.VerticalSeparator(),sg.Column(psf_detection_input_values_rvt)],  
     ]
 
@@ -376,8 +407,9 @@ video_dra = None
 playing = False
 colorbar = None
 im = None
+im2 = None
+im3 = None
 
-psf_extractor = PSFsExtractionPreview(min_sigma=1, max_sigma=3, threshold=0.008)
 
 #%%#######################--------MAIN--------###########################
 
@@ -458,9 +490,9 @@ while True:
                 fig, ax = plt.subplots(1,1,constrained_layout=True, figsize=(250*pxu,250*pxu)) #Change the Inset to the canvas here, it depends on the computer you are using it on
                 fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(500*pxu,250*pxu))
                 ax.clear()
-                im = ax.imshow(decoy_img, cmap='gray', vmin=0, vmax=255)
+                im = ax.imshow(decoy_img)
                 ax.axis('off')
-                draw_figure(canvas_elem, fig)
+                draw_figure_plot(canvas_elem, fig)
 
                 print(f'Changed Inlay Scaling to: {pxu}')
 
@@ -595,12 +627,7 @@ while True:
                     print(f'Filtered video is not yet in memory! Please process first!')
                     window['-FILTVID-'].update(False) 
                     continue
-                else:
-                    frame = video_dra[frame_index, :, :]
-                    psf_data = find_blobs(frame, 0.01, frame_index)
-                    for row in psf_data: 
-                        cir = patches.Circle((row[2], row[1]), 8, color='r',fill = False)
-                        ax.add_patch(cir)
+
 
 
             # reset the frame_index advancement
@@ -682,7 +709,7 @@ while True:
                     ax2[1].imshow(frame_pn, cmap='gray')
                     ax2[1].set_title('Preprocessed Video', fontsize=8)
                     ax2[1].axis('off')
-                    draw_figure(canvas_elem_pn, fig2)
+                    draw_figure_plot(canvas_elem_pn, fig2)
 
             elif values['-DFC-'] == False:
                 # checkbox for powernormalization of pure video without darkframe correction            
@@ -699,7 +726,7 @@ while True:
                     ax2[1].set_xlabel(f'Frame Number {frame_index + 1}', fontsize=8)
                     ax2[1].imshow(frame_pn, cmap='gray')
                     ax2[1].set_title('Preprocessed Video', fontsize=8)
-                    draw_figure(canvas_elem_pn, fig2)
+                    draw_figure_plot(canvas_elem_pn, fig2)
         else:
             print(f'Please select a video first')
 
@@ -733,22 +760,75 @@ while True:
 
             if values['-FPNc-'] == 'DRA_PN':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in)
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
             elif values['-FPNc-'] == 'cpFPNc':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='cpFPN')
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
             elif values['-FPNc-'] == 'mFPNc':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='mFPN')
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
             elif values['-FPNc-'] == 'wFPNc':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='wFPN')
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
             elif values['-FPNc-'] == 'fFPNc':
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='fFPN')
-                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
-        
+                video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
+
+            psf_preview = PSFsExtractionPreview(video_dra.shape[1:])
+
         else:
             print(f'Please select a video first')
+
+    elif values['-PSFPV-'] == True:
+        window['-PLAY OPTION-'].update("Enable Video Player: NO")
+
+        if video_dra is not None:
+            
+            if values['-PSF_MODE-'] == 'DOG':
+                function = 'dog'
+            elif values['-PSF_MODE-'] == 'DOH':
+                function = 'doh'
+            elif values['-PSF_MODE-'] == 'LOG':
+                function = 'log'                
+            elif values['-PSF_MODE-'] == 'RVT':
+                function = 'RVT'
+
+            min_sigma = float(values['-SMIN-'])
+            max_sigma = float(values['-SMAX-'])
+            sigma_ratio = float(values['-SSTEP-'])
+            threshold = float(values['-STHRESH-'])
+            min_radius = int(values['-MINRAD-'])
+
+            frame_index = int(values['-FRNR-'])-1
+            frame = video_dra[frame_index,:,:]
+
+            psf_positions = psf_preview.psf_detection(frame, frame_index, function=function,
+                                                       min_sigma = min_sigma, max_sigma = max_sigma,
+                                                       sigma_ratio = sigma_ratio, threshold = threshold, min_distance = min_radius)
+
+            [p.remove() for p in reversed(ax.patches)]  
+
+            if im is None:
+                # If it's the first frame, create the image and colorbar
+                im = ax.imshow(frame, cmap='viridis')
+                ax.set_title(f'Frame Number {frame_index + 1}')
+                ax.axis('off')
+                colorbar = fig.colorbar(im, ax=ax, shrink=0.7)
+                colorbar.ax.tick_params(labelsize=5)
+                fig.tight_layout()
+
+            else:
+                # Update the image data on subsequent frames
+                ax.set_title(f'Frame Number {frame_index + 1}')
+                update_figure(frame, im, colorbar, psf_positions=psf_positions, psf_extractor=psf_preview, radius=8)
+
+            canvas = draw_figure(window['-CANVAS-'], fig, canvas)
+
+        else:
+            print(f'Filtered video is not yet in memory! Please process first!')
+            window['-PSFPV-'].update(False)
+            continue
+
 
 window.close()
 cpu_window.close()

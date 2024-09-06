@@ -43,7 +43,7 @@ frame_index = 0
 frame = video_dra[frame_index]
 
 # Detect PSFs in the frame
-psf_positions = psf_preview.psf_detection(frame, frame_index, function='dog')
+psf_positions = psf_preview.psf_detection(frame, frame_index, function='dog', min_distance = 15)
 
 print(psf_positions)
 print(len(psf_positions[:,1:3]))
