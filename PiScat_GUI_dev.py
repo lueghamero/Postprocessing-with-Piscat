@@ -45,35 +45,21 @@ def draw_figure_plot(canvas_elem, figure):
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
 def update_figure(image_data, im, colorbar, psf_positions=None, psf_extractor=None, radius=5):
-    """
-    Updates the matplotlib figure with new image data and optional PSF circles.
 
-    Args:
-        image_data (ndarray): The new image data to display.
-        im (matplotlib.image.AxesImage): The image handle to update.
-        colorbar (matplotlib.colorbar.Colorbar): The colorbar to update (if present).
-        psf_positions (ndarray): Optional, array of PSF positions with columns [frame_num, y, x, sigma].
-        psf_extractor (PSFsExtractionPreview): Instance of PSF extraction class for generating red circles.
-        radius (float): The radius of the red circles to be drawn.
-    """
     # Clear previous circles if any
     for artist in im.axes.artists:
         artist.remove()  # Remove all previously drawn circles
 
-    # Update the image data
     im.set_data(image_data)
     
-    # Auto-scale the image to its new data range
     im.set_clim(vmin=np.min(image_data), vmax=np.max(image_data))
     
     if colorbar:
         colorbar.update_normal(im)
 
-    # If PSF positions are provided, create red circles
     if psf_positions is not None and psf_extractor is not None:
         psf_extractor.create_red_circles(psf_positions, im.axes, radius=radius)
 
-    # Redraw the updated figure
     im.axes.figure.canvas.draw_idle()
 
 

@@ -25,7 +25,7 @@ if filename is None:
 filename_folder = os.path.dirname(filename)
 filename_measurement = os.path.splitext(os.path.basename(filename))[0]
 
-video_data = np.load(filename)
+video_data = np.load(filename, allow_pickle=True)
 video_data = video_data[0:100,:,:]
 #video_data = np.transpose(video_data, (1, 2, 0))
 
@@ -43,10 +43,11 @@ frame_index = 0
 frame = video_dra[frame_index]
 
 # Detect PSFs in the frame
-psf_positions = psf_preview.psf_detection(frame, frame_index, function='dog', min_distance = 15)
+psf_positions = psf_preview.psf_detection(frame, frame_index, function='dog', min_distance = 0.3)
 
 print(psf_positions)
-print(len(psf_positions[:,1:3]))
+print(psf_positions[:,1:3])
+print(psf_positions.shape[0])
 # Plot the frame and the red circles for detected PSFs
 fig, ax = plt.subplots()
 ax.imshow(frame, cmap='gray')
