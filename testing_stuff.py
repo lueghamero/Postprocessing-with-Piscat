@@ -14,149 +14,50 @@ from piscat.Localization import *
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
 import cv2
-from PSF_localization_preview import *
+from PSF_localization_preview_copy import *
 
-filename = sg.popup_get_file('Filename to play')
+
+#filename = sg.popup_get_file('Filename to play')
 #filename = r"C:\Users\Emanuel\Desktop\Masterarbeit\2024_02_27_data\12_59_32_Sample1_Refrence_Air.npy"
-
-if filename is None:
-    exit()
+filename = r"C:\Users\Dante\Desktop\Processed_iScat_Vids/15_35_12_Au_3mul_15042024_DRA_filtered.npy"
+#if filename is None:
+#    exit()
 #My version of extracting folder in which data is stored and name of data:
 filename_folder = os.path.dirname(filename)
 filename_measurement = os.path.splitext(os.path.basename(filename))[0]
 
 video_data = np.load(filename, allow_pickle=True)
-video_data = video_data[0:100,:,:]
+video_dra = video_data[0:50,:,:]
 #video_data = np.transpose(video_data, (1, 2, 0))
 
-video_pn, power_fluctuation = Normalization(video=video_data).power_normalized()
+#video_pn, power_fluctuation = Normalization(video=video_data).power_normalized()
 
-video_dr = DifferentialRollingAverage(video=video_pn, batchSize=30, mode_FPN='fFPN')
-video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
+#video_dr = DifferentialRollingAverage(video=video_pn, batchSize=30, mode_FPN='fFPN')
+#video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
 
 # Assume 'video' is your video array and has shape (num_frames, height, width)
+n = np.shape(video_dra)[0]
 
-psf_preview = PSFsExtractionPreview(video_dra.shape[1:])
+frame_number = list(range(1, n))
+PSFs = PSFsExtraction(video_dra)
 
-# Get a single frame from the video
-frame_index = 0
-frame = video_dra[frame_index]
 
 # Detect PSFs in the frame
-psf_positions = psf_preview.psf_detection(frame, frame_index, function='dog', min_distance = 0.3)
+psf_positions = PSFs.psf_detection_preview( function='dog', min_sigma=1, max_sigma=5, sigma_ratio=1.01, threshold= 9e-3, frame_number=frame_number)
+#psf_positions_filtered = SpatialFilter().remove_side_lobes_artifact(psf_positions)
+#psf_positions_filtered = SpatialFilter().dense_PSFs(psf_positions_filtered)
 
 print(psf_positions)
-print(psf_positions[:,1:3])
-print(psf_positions.shape[0])
-# Plot the frame and the red circles for detected PSFs
-fig, ax = plt.subplots()
-ax.imshow(frame, cmap='gray')
+#print(psf_positions_filtered)
 
-# Add red circles to the detected PSF positions
-psf_preview.create_red_circles(psf_positions, ax, radius=8)
 
-# Display the result
-plt.show()
+display_psf_loaded = DisplayDataFramePSFsLocalization( video_dra, psf_positions,  0.1, False)
+display_psf_loaded.show_psf(display_history=False)
+
+
 
 
 #PSFshow = PSF.psf_detection_preview(function='dog', min_sigma=1, max_sigma=8, sigma_ratio=1.5, threshold=0.00008, overlap=0, mode='BOTH', frame_number=100, IntSlider_width='400px')
 
-
-
-
-
-
-
-
-
-"""
-# Ensure the pixel values are within the correct range
-if video_data.dtype != np.uint8 or video_data.min() < 0 or video_data.max() > 255:
-    # Normalize the pixel values to the range 0-255 and convert to uint8
-    video_data = ((video_data - video_data.min()) / (video_data.max() - video_data.min()) * 255).astype(np.uint8)
-
-video_pn, power_fluctuation = Normalization(video=video_data).power_normalized()
-
-l_range = list(range(30, 300, 30))
-noise_floor_DRA_pn = NoiseFloor(video_pn, list_range=l_range)
-
-min_value = min(noise_floor_DRA_pn.mean)
-min_index = noise_floor_DRA_pn.mean.index(min_value)
-opt_batch = l_range[min_index]
-
-def DifferentialAvg(video, batch_size):
-    video_dr = DifferentialRollingAverage(video=video, batchSize=batch_size, mode_FPN='mFPN')
-    video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=False)
-    return video_dra
-
-processed_vid = DifferentialAvg(video_pn, 10)
-
-Display(processed_vid,time_delay=500) 
-
-# Print the shape of the array to understand its structure
-print("Shape of the video data:", processed_vid.shape)
-
-
-
-# Release the video window
-cv2.destroyAllWindows()
-
-# Calculate the center of the frame
-center_x, center_y = frame_width // 2, frame_height // 2
-crop_size = 128
-
-# Calculate cropping box coordinates
-start_x = center_x - crop_size // 2
-end_x = start_x + crop_size
-start_y = center_y - crop_size // 2
-end_y = start_y + crop_size
-
-# Ensure the coordinates are within the frame dimensions
-start_x = max(0, start_x)
-end_x = min(frame_width, end_x)
-start_y = max(0, start_y)
-end_y = min(frame_height, end_y)
-
-# Iterate over each frame and display it
-for frame_index in range(num_frames):
-    frame = video_data[frame_index]
-    cropped_frame = frame[start_y:end_y, start_x:end_x]
-    
-    # Check if the frame is grayscale or color
-    if cropped_frame.ndim == 2:  # Grayscale
-        cv2.imshow('Video', cropped_frame)
-    elif cropped_frame.ndim == 3:  # Color
-        cv2.imshow('Video', cv2.cvtColor(cropped_frame, cv2.COLOR_RGB2BGR))
-    else:
-        raise ValueError(f"Unexpected frame dimensions: {cropped_frame.shape}")
-
-    # Wait for 25 ms between frames (40 FPS)
-    if cv2.waitKey(20) & 0xFF == ord('q'):
-        break
-
-# Release the video window
-cv2.destroyAllWindows()
-
-
-
-
-df_video = reading_videos.DirectoryType(filename, type_file='raw').return_df()
-paths = df_video['Directory'].tolist()
-video_names = df_video['File'].tolist()
-
-video = np.load(filename)
-video = np.transpose(video, (1,2,0))
-vid_norm = np.sum(video, (0,1))/(np.shape(video)[0]*np.shape(video)[1])
-vid = video/vid_norm
-
-video_pn, power_fluctuation = Normalization(video=video).power_normalized()
-
-
-plt.plot(power_fluctuation, 'b', linewidth=1, markersize=0.5)
-plt.xlabel('Frame #', fontsize=18)
-plt.ylabel(r"$p / \bar p - 1$", fontsize=18)
-plt.title('Intensity fluctuations in the laser beam', fontsize=13)
-plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
-"""
 
 
