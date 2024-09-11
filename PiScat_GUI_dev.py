@@ -10,6 +10,7 @@ import tkinter as tk
 import skimage
 import time
 from mpy_functions_new import *
+import pandas
 
 from piscat.Visualization import * 
 from piscat.Preproccessing import *
@@ -17,7 +18,6 @@ from piscat.BackgroundCorrection import *
 from piscat.InputOutput import *
 from piscat.Localization import *
 
-from PSF_localization_preview import *
 
 
 #%%##################--------FUNCTIONS--------########################
@@ -44,7 +44,7 @@ def draw_figure_plot(canvas_elem, figure):
     canvas.draw()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-def update_figure(image_data, im, colorbar, psf_positions=None, psf_extractor=None, radius=5):
+def update_figure(image_data, im, colorbar, psf_positions=None, radius=8):
 
     # Clear previous circles if any
     for artist in im.axes.artists:
@@ -57,11 +57,22 @@ def update_figure(image_data, im, colorbar, psf_positions=None, psf_extractor=No
     if colorbar:
         colorbar.update_normal(im)
 
-    if psf_positions is not None and psf_extractor is not None:
-        psf_extractor.create_red_circles(psf_positions, im.axes, radius=radius)
+    if psf_positions is not None:
+        create_red_circles(psf_positions, im.axes, radius=radius)
 
     im.axes.figure.canvas.draw_idle()
 
+def create_red_circles(psf_positions, ax, radius):
+
+    circles = []
+    for psf in psf_positions:
+        # PSF positions are assumed to be in the format [frame_num, y, x, sigma]
+        y, x = psf[1], psf[2]
+        circle = patches.Circle((x, y), radius=radius, edgecolor='red', facecolor='none', lw=1)
+        ax.add_patch(circle)
+        circles.append(circle)
+        
+    return circles
 
 
 #create a folder for the config file, in which saves such as the filepath to the video is stored
@@ -413,7 +424,7 @@ while True:
         
         while True:
 
-            event2, value2 = cpu_window.read(timeout=10)
+            event2, value2 = cpu_window.read(timeout=25)
 
             if event2 == sg.WINDOW_CLOSED:
                 break
@@ -760,7 +771,7 @@ while True:
                 video_dr = DifferentialRollingAverage(video_dra_raw, batchSize_in, mode_FPN='fFPN')
                 video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
 
-            psf_preview = PSFsExtractionPreview(video_dra.shape[1:])
+            PSFs = PSFsExtraction(video_dra)
 
         else:
             print(f'Please select a video first')
@@ -788,12 +799,15 @@ while True:
             frame_index = int(values['-FRNR-'])-1
             frame = video_dra[frame_index,:,:]
 
-            psf_positions = psf_preview.psf_detection(frame, frame_index, function=function,
+            psf_positions = PSFs.psf_detection_preview(frame_number = frame_index, function=function,
                                                        min_sigma = min_sigma, max_sigma = max_sigma,
-                                                       sigma_ratio = sigma_ratio, threshold = threshold, min_distance = min_radius)
+                                                       sigma_ratio = sigma_ratio, threshold = threshold, overlap = 0)
 
+            psf_preview = psf_positions[['frame','y','x','sigma','center_intensity']].to_numpy()
+            
             [p.remove() for p in reversed(ax.patches)]  
 
+            circles = []
             if im is None:
                 # If it's the first frame, create the image and colorbar
                 im = ax.imshow(frame, cmap='viridis')
@@ -806,10 +820,10 @@ while True:
             else:
                 # Update the image data on subsequent frames
                 ax.set_title(f'Frame Number {frame_index + 1}')
-                update_figure(frame, im, colorbar, psf_positions=psf_positions, psf_extractor=psf_preview, radius=8)
+                update_figure(frame, im, colorbar, psf_positions=psf_preview, radius=8)
 
             canvas = draw_figure(window['-CANVAS-'], fig, canvas)
-
+            
         else:
             print(f'Filtered video is not yet in memory! Please process first!')
             window['-PSFPV-'].update(False)
