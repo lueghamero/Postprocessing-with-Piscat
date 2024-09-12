@@ -261,6 +261,8 @@ def window_layout():
         [sg.Text('Sigma ratio'), sg.Push(), sg.Slider(range=(1.1,3), size=(20,10), resolution = 0.1, default_value = 1.1, orientation='h', key='-SSTEP-', enable_events=True)],
         [sg.Text('Threshold'), sg.Push(), sg.Slider(range=(1e-4,1e-2), size=(20,10), resolution= 1e-4, default_value = 5e-3, orientation='h', key='-STHRESH-', enable_events=True)],
         [sg.Text('Min Radius'), sg.Push(), sg.Slider(range=(1,50), size=(20,10), resolution= 1, default_value=15, orientation='h', key='-MINRAD-', enable_events=True)],
+        [sg.HorizontalSeparator()],
+        [sg.Text('DOH Sigma ratio'), sg.Push(), sg.Slider(range=(1,10), size=(20, 10), resolution=1, default_value=1, orientation='h', key='-SSTEPDOH-', enable_events=True, disabled=True)]
     ]
 
     psf_detection_input_values_rvt = [
@@ -271,7 +273,7 @@ def window_layout():
         [sg.Column([ 
          [sg.Text('Filtering Mode:')],
          [sg.Combo(['DOG', 'LOG', 'DOH', 'RVT'], key='-PSF_MODE-', default_value='DOG', enable_events=True, size=(20,10),readonly=True)]]),
-        sg.Column([[sg.Button('Show PSF Preview')],[sg.Checkbox('PSF Preview', key='-PSFPV-', enable_events=True)]])],
+        sg.Column([[sg.VPush(),sg.Checkbox('PSF Preview', key='-PSFPV-', enable_events=True),sg.VPush()]])],
         [sg.Column(psf_detection_input_values_dog, vertical_alignment='top'),sg.VerticalSeparator(),sg.Column(psf_detection_input_values_rvt)],  
     ]
 
@@ -358,15 +360,27 @@ def Saving_layout():
         [sg.Push(), sg.Button('Save Video Data'), sg.Button('Save PSF Data'), sg.Push()]
     ]
 
-    saving_window = sg.Window('Save Data', save_layout, resizable=True, finalize=True)
+    saving_window = sg.Window('Save processed Data', save_layout, resizable=True, finalize=True)
 
     return saving_window
 
 
-
-
 #------------------------------------------------------------------------
 # Data Window Load:
+
+def Loading_layout():
+
+    load_layout = [
+        [sg.Push(),sg.Text('Choose a video to load'), sg.Push()],
+        [sg.Push(),sg.Input(key='-LOADING_FILE-', enable_events=True), sg.FileBrowse(),sg.Push()], 
+        [sg.Push(),sg.Button('Load as PN Video'), sg.Button('Load as DRA Video'),sg.Push()]
+    ]
+
+    loading_window = sg.Window('Load processed Data', load_layout, resizable=True, finalize=True)
+
+    return loading_window
+
+#------------------------------------------------------------------------
 
 window = window_layout()
 
@@ -424,7 +438,7 @@ while True:
         
         while True:
 
-            event2, value2 = cpu_window.read(timeout=25)
+            event2, value2 = cpu_window.read(timeout=10)
 
             if event2 == sg.WINDOW_CLOSED:
                 break
@@ -535,6 +549,34 @@ while True:
                         print(f'There is no DRA Filtered Video in the Memory')
                     pass
 
+#---------------------------------------------------------
+    # Open Window for Saving Data
+    if event == 'Load':
+        loading_window = Loading_layout()
+
+        while True:
+
+            event5, value5 = loading_window.read(timeout=10)
+
+            if event5 == sg.WINDOW_CLOSED:
+                break
+
+            elif event5  == '-LOADING_FILE-':
+                loading_file = value5['-LOADING_FILE-']
+
+            elif event5 == 'Load as PN Video':
+                video_pn = np.load(value5['-LOADING_FILE-'])
+                print(f'Loaded {loading_file} as PN video')
+                loading_window.close()
+
+            elif event5 == 'Load as DRA Video':
+                video_dra = np.load(value5['-LOADING_FILE-'])
+                print(f'Loaded {loading_file} as DRA video')
+                PSFs = PSFsExtraction(video_dra)
+                vid_len = video_dra.shape[0]
+                frame_index = 0
+                window['-FRNR-'].update(range=(1, vid_len) ,disabled=False)
+                loading_window.close()
 
 #---------------------------------------------------------
 # Main window again
@@ -595,6 +637,15 @@ while True:
             print(f'Loaded {full_path_dark} as darkframe video')
         else:
             print(f'File could not be loaded: {full_path_dark}')
+
+    elif event == 'Crop seleceted Video':
+        if 'full_path' in locals() and full_path:    
+            cropper = vc(full_path)
+            cropper.select_roi(frame_index=10)
+            cropped_video_data = cropper.crop_video()
+            cropper.save_cropped_video(cropped_video_data)
+        else:
+            sg.popup('Please load a video file first.')
     
 
     elif values['-PLAY OPTION-'] == "Enable Video Player: YES":
@@ -619,12 +670,12 @@ while True:
                 vid_len = video_data.shape[0]
                 window['-FRNR-'].update(range=(1, vid_len) ,disabled=False)
 
+
             if values['-SHOW_PSF-'] == True:
                 if video_dra is None:
                     print(f'Filtered video is not yet in memory! Please process first!')
                     window['-FILTVID-'].update(False) 
                     continue
-
 
 
             # reset the frame_index advancement
@@ -783,18 +834,27 @@ while True:
             
             if values['-PSF_MODE-'] == 'DOG':
                 function = 'dog'
+                window['-SSTEPDOH-'].update(disabled=True)
             elif values['-PSF_MODE-'] == 'DOH':
                 function = 'doh'
+                window['-SSTEPDOH-'].update(disabled=False)
             elif values['-PSF_MODE-'] == 'LOG':
-                function = 'log'                
+                function = 'log'
+                window['-SSTEPDOH-'].update(disabled=True)                
             elif values['-PSF_MODE-'] == 'RVT':
                 function = 'RVT'
+                window['-SSTEPDOH-'].update(disabled=True)
+
+            if values['-PSF_MODE-'] == 'DOH':
+                sigma_ratio = int(values['-SSTEPDOH-'])
+            else:
+                sigma_ratio = float(values['-SSTEP-'])
 
             min_sigma = float(values['-SMIN-'])
             max_sigma = float(values['-SMAX-'])
-            sigma_ratio = float(values['-SSTEP-'])
             threshold = float(values['-STHRESH-'])
             min_radius = int(values['-MINRAD-'])
+            sigma_ratio_doh = int(values['-SSTEPDOH-'])
 
             frame_index = int(values['-FRNR-'])-1
             frame = video_dra[frame_index,:,:]

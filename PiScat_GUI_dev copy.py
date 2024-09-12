@@ -717,7 +717,6 @@ while True:
         else:
             print(f'Please select a video first')
 
-fig_agg.draw()
 window.close()
 cpu_window.close()
 scaling_window.close()
