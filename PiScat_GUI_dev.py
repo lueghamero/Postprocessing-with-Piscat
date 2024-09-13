@@ -167,19 +167,6 @@ def save_video_in_path(video_data ,input_filepath, output_folder, suffix):
     print(f'{suffix} video has been saved as {output_filepath}')
 
 
-
-#Class for redirecting Terminal Output to GUI
-class OutputRedirector:
-    def __init__(self, window, key):
-        self.window = window
-        self.key = key
-
-    def write(self, message):
-        self.window.write_event_value(self.key, message)
-
-    def flush(self):
-        pass
-
 # Load the last selected folder path
 folder, full_path_dark, saving_folder, PSF_folder = load_file_paths()
 initial_show_only_npy = True
@@ -231,7 +218,7 @@ def window_layout():
 
     terminal_prep = [  
         [sg.Multiline(size=(150,15), key='-OUTPUT-',expand_x=True, autoscroll = True, background_color='black',
-                       text_color='white', reroute_stdout=True, reroute_stderr=True)]
+                       text_color='white', reroute_stdout=True, reroute_stderr=False)]
     ]
 
     power_normalization_df_correction = [
@@ -256,35 +243,67 @@ def window_layout():
     ]
 
     psf_detection_input_values_dog = [
-        [sg.Text('Sigma min'), sg.Push(), sg.Slider(range=(1,5), size=(20,10), resolution = 0.5, default_value=1, orientation='h', key='-SMIN-', enable_events=True)],
-        [sg.Text('Sigma max'), sg.Push(), sg.Slider(range=(1,10), size=(20,10), resolution = 0.5, default_value=5, orientation='h', key='-SMAX-', enable_events=True)],
-        [sg.Text('Sigma ratio'), sg.Push(), sg.Slider(range=(1.1,3), size=(20,10), resolution = 0.1, default_value = 1.1, orientation='h', key='-SSTEP-', enable_events=True)],
-        [sg.Text('Threshold'), sg.Push(), sg.Slider(range=(1e-4,1e-2), size=(20,10), resolution= 1e-4, default_value = 5e-3, orientation='h', key='-STHRESH-', enable_events=True)],
-        [sg.Text('Min Radius'), sg.Push(), sg.Slider(range=(1,50), size=(20,10), resolution= 1, default_value=15, orientation='h', key='-MINRAD-', enable_events=True)],
-        [sg.HorizontalSeparator()],
-        [sg.Text('DOH Sigma ratio'), sg.Push(), sg.Slider(range=(1,10), size=(20, 10), resolution=1, default_value=1, orientation='h', key='-SSTEPDOH-', enable_events=True, disabled=True)]
+        [sg.Frame('DOG/DOH/LOG Values',[
+         [sg.Text('Sigma min'), sg.Push(), sg.Slider(range=(1,5), size=(20,10), resolution = 0.5, default_value=1, orientation='h', key='-SMIN-', enable_events=True)],
+         [sg.Text('Sigma max'), sg.Push(), sg.Slider(range=(1,10), size=(20,10), resolution = 0.5, default_value=5, orientation='h', key='-SMAX-', enable_events=True)],
+         [sg.Text('Sigma ratio'), sg.Push(), sg.Slider(range=(1.1,3), size=(20,10), resolution = 0.1, default_value = 1.1, orientation='h', key='-SSTEP-', enable_events=True)],
+         [sg.Text('Threshold'), sg.Push(), sg.Slider(range=(1e-4,1e-2), size=(20,10), resolution= 1e-4, default_value = 5e-3, orientation='h', key='-STHRESH-', enable_events=True)],
+         [sg.Text('Overlap'), sg.Push(), sg.Slider(range=(0,1), size=(20,10), resolution= 0.1, default_value=0, orientation='h', key='-OVERLAP-', enable_events=True)],
+        ],expand_x=True, expand_y=True)],
+        [sg.Frame('DOH Value',
+         [[sg.Text('DOH Sigma ratio'), sg.Push(), sg.Slider(range=(1,10), size=(20, 10), resolution=1, default_value=1, orientation='h', key='-SSTEPDOH-', enable_events=True, disabled=True)]]
+        ,expand_x=True, expand_y=True)],
+        [sg.Frame('RVT Values',[
+         [sg.Text('Radius min'), sg.Push(), sg.Slider(range=(1,10), size=(20,10), resolution = 0.5, default_value=1, orientation='h', key='-RMIN-', enable_events=True)],
+         [sg.Text('Radius max'), sg.Push(), sg.Slider(range=(1,15), size=(20,10), resolution = 0.5, default_value=5, orientation='h', key='-RMAX-', enable_events=True)],
+         [sg.Text('Upsample'), sg.Push(), sg.Slider(range=(1,10), size=(20,10), resolution = 1, default_value = 0, orientation='h', key='-UPSAMPLE-', enable_events=True)],
+         [sg.Text('Coarse Factor'), sg.Push(), sg.Slider(range=(1,10), size=(20,10), resolution= 1, default_value = 1, orientation='h', key='-COARSEFACTOR-', enable_events=True)],
+        ],expand_x=True, expand_y=True)],
+        [sg.Push(), sg.Button('Apply PSF Detection'), sg.Push()]
     ]
 
-    psf_detection_input_values_rvt = [
-
-    ]
 
     piscat_psf_detection = [
         [sg.Column([ 
-         [sg.Text('Filtering Mode:')],
+         [sg.Text('Detection Mode:')],
          [sg.Combo(['DOG', 'LOG', 'DOH', 'RVT'], key='-PSF_MODE-', default_value='DOG', enable_events=True, size=(20,10),readonly=True)]]),
         sg.Column([[sg.VPush(),sg.Checkbox('PSF Preview', key='-PSFPV-', enable_events=True),sg.VPush()]])],
-        [sg.Column(psf_detection_input_values_dog, vertical_alignment='top'),sg.VerticalSeparator(),sg.Column(psf_detection_input_values_rvt)],  
+        [sg.Column(psf_detection_input_values_dog, vertical_alignment='top')],
+
+    ]
+
+    psf_filtering_column1 = [
+        [sg.Frame('2D Gauss Fit',[
+         [sg.Checkbox('2D-Gaussian Fit', key='-2DGAUSS-', default=True)],
+         [sg.Checkbox('FRST Localization Improvement', key='-FRST-', default=True)],
+         [sg.Text('ROI Scale'),sg.Push(),sg.Slider(range=(1,20), size=(20,10), resolution=1, default_value=5, orientation='h', key='-GAUSSSCALE-', enable_events=True)]],
+         expand_x=True, expand_y=True)],
+        [sg.Frame('Spatial Filtering', [
+         [sg.Checkbox('Outlier Frames', key='-OUTLIER-', default=True)],
+         [sg.Text('Threshold Outlier'), sg.Push(), sg.Slider(range=(1,50), size=(20,10), resolution=1, default_value=25, orientation='h', key='-THRESHOUT-', enable_events=True) ],
+         [sg.Checkbox('Dense_PSFs', key='-DENSEPSF-', default=True)],
+         [sg.Text('Threshold Dense PSFs'), sg.Push(), sg.Slider(range=(0,1), size=(20,10), resolution=0.1, default_value=0, orientation='h', key='-THRESDENSE-', enable_events=True) ],
+         [sg.Checkbox('Symmetric PSFs', key='-SYMMETRICPSF-', default=True)],
+         [sg.Text('Threshold Symmetric PSFs'), sg.Push(), sg.Slider(range=(0,1), size=(20,10), resolution=0.1, default_value=0.7, orientation='h', key='-THRESHSYM-', enable_events=True) ],
+         [sg.Checkbox('Remove Side Lobes', key='-SIDELOBES-', default=True)],
+         [sg.Text('Threshold Side Lobes'), sg.Push(), sg.Slider(range=(0,1), size=(20,10), resolution=0.1, default_value=0, orientation='h', key='-THRESHSIDELOBES-', enable_events=True) ]
+         ], expand_x=True, expand_y=True)],
+        [sg.Push(), sg.Button('Apply Filters'), sg.Push()]
+    ]
+
+
+    psf_filtering = [
+        [sg.Column(psf_filtering_column1, vertical_alignment='top')]
     ]
 
     tab_layout = [
-        [sg.TabGroup([[sg.Tab("Preprocessing", piscat_preprocessing), sg.Tab("Particle Detection", piscat_psf_detection)]])]
+        [sg.TabGroup([[sg.Tab("Preprocessing", piscat_preprocessing), sg.Tab("PSF Detection", piscat_psf_detection), sg.Tab('PSF Filtering', psf_filtering)]])]
     ]
 
     piscat_layout =     [
         [sg.Frame("Piscat", tab_layout, expand_x=True, expand_y=True)],
         [sg.HorizontalSeparator()],
-        [sg.Frame("Terminal", terminal_prep, expand_x=True)]
+        [sg.Frame("History", terminal_prep, expand_x=True)]
     ]
 
     layout = [
@@ -386,11 +405,6 @@ window = window_layout()
 
 #%%##################--------INITIALIZATION--------########################
 
-#Redirecting Terminal Output to the GUI
-output_redirector = OutputRedirector(window, '-OUTPUT-')
-sys.stdout = output_redirector
-sys.stderr = output_redirector
-
 #Check the second entry of the config file, if it is not empty it shows the path of the Darkframe video
 if full_path_dark:
    print(f'Loaded {full_path_dark} as darkframe video')
@@ -400,7 +414,7 @@ px = 1/plt.rcParams['figure.dpi']  # pixel in inches
 
 fig, ax = plt.subplots()
 fig.patch.set_facecolor(color = 'lightblue')
-fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(500*px,250*px))
+fig2, ax2 = plt.subplots(1,2,constrained_layout=True, figsize=(1000*px,500*px))
 canvas_elem = window['-CANVAS-']
 canvas_elem_pn = window['-PNCANV-']
 
@@ -650,6 +664,10 @@ while True:
 
     elif values['-PLAY OPTION-'] == "Enable Video Player: YES":
         if video_data is not None or video_dra is not None:
+            
+            if video_data is None:
+                video_data = video_dra
+
             # checkbox for differential view
             if values['-DIFF-'] == True:
                 frame = differential_view(video_data, frame_index, batchSize)
@@ -853,15 +871,14 @@ while True:
             min_sigma = float(values['-SMIN-'])
             max_sigma = float(values['-SMAX-'])
             threshold = float(values['-STHRESH-'])
-            min_radius = int(values['-MINRAD-'])
-            sigma_ratio_doh = int(values['-SSTEPDOH-'])
+            overlap = float(values['-OVERLAP-'])
 
             frame_index = int(values['-FRNR-'])-1
             frame = video_dra[frame_index,:,:]
 
             psf_positions = PSFs.psf_detection_preview(frame_number = frame_index, function=function,
                                                        min_sigma = min_sigma, max_sigma = max_sigma,
-                                                       sigma_ratio = sigma_ratio, threshold = threshold, overlap = 0)
+                                                       sigma_ratio = sigma_ratio, threshold = threshold, overlap = overlap)
 
             psf_preview = psf_positions[['frame','y','x','sigma','center_intensity']].to_numpy()
             
@@ -885,15 +902,64 @@ while True:
             canvas = draw_figure(window['-CANVAS-'], fig, canvas)
             
         else:
-            print(f'Filtered video is not yet in memory! Please process first!')
+            print(f'Filtered video is not yet in memory! Please process or load first!')
             window['-PSFPV-'].update(False)
             continue
+    
+    elif event == 'Apply PSF Detection':
+        
+        if video_dra is not None:
+            
+            if values['-PSF_MODE-'] == 'DOG':
+                function = 'dog'
+            elif values['-PSF_MODE-'] == 'DOH':
+                function = 'doh'
+            elif values['-PSF_MODE-'] == 'LOG':
+                function = 'log'               
+            elif values['-PSF_MODE-'] == 'RVT':
+                function = 'RVT'
+
+            if values['-PSF_MODE-'] == 'DOH':
+                sigma_ratio = int(values['-SSTEPDOH-'])
+            else:
+                sigma_ratio = float(values['-SSTEP-'])
+
+            min_sigma = float(values['-SMIN-'])
+            max_sigma = float(values['-SMAX-'])
+            threshold = float(values['-STHRESH-'])
+            overlap = float(values['-OVERLAP-'])
+
+            rmin = values['-RMIN-']
+            rmax = values['-RMAX-']
+            upsample = values['-UPSAMPLE-']
+            coarse_factor = values['-COARSEFACTOR-']
+
+            detected_psfs = PSFs.psf_detection(function = function, min_sigma = min_sigma, max_sigma = max_sigma,
+                                               sigma_ratio = sigma_ratio, threshold = threshold, overlap = overlap,
+                                               min_radial = rmin, max_radial = rmax, upsample = upsample,
+                                               coarse_factor = coarse_factor)
+            
+            print(f'Done!')
+
+        else:
+            print(f'Filtered video is not yet in memory! Please process or load first!')
+            window['-PSFPV-'].update(False)
+            continue
+    
+    elif event == 'Apply Filters':
+        if detected_psfs is not None:    
+            
+            filters = SpatialFilter()
+
+            if values['-2DGAUSS-']== True:
+                detected_psfs = PSFs.fit_Gaussian2D_wrapper()
+
+        else:
+            print(f'No PSFs detected yet. Pls load Data or process the Video')
+
+    
 
 
 window.close()
 cpu_window.close()
 scaling_window.close()
-
-# variables for Terminal output
-sys.stdout = sys.__stdout__
-sys.stderr = sys.__stderr__

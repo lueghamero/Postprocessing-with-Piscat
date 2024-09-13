@@ -27,7 +27,7 @@ filename_folder = os.path.dirname(filename)
 filename_measurement = os.path.splitext(os.path.basename(filename))[0]
 
 video_data = np.load(filename, allow_pickle=True)
-video_dra = video_data[0:50,:,:]
+video_dra = video_data[:,:,:]
 #video_data = np.transpose(video_data, (1, 2, 0))
 
 #video_pn, power_fluctuation = Normalization(video=video_data).power_normalized()
@@ -43,7 +43,7 @@ PSFs = PSFsExtraction(video_dra)
 
 
 # Detect PSFs in the frame
-psf_positions = PSFs.psf_detection_preview( function='dog', min_sigma=1, max_sigma=5, sigma_ratio=1.01, threshold= 9e-3, frame_number=frame_number)
+psf_positions = PSFs.psf_detection( function='dog', min_sigma=2.5, max_sigma=6, sigma_ratio=1.1, threshold= 0.0042, overlap = 0)
 #psf_positions_filtered = SpatialFilter().remove_side_lobes_artifact(psf_positions)
 #psf_positions_filtered = SpatialFilter().dense_PSFs(psf_positions_filtered)
 
@@ -51,8 +51,8 @@ print(psf_positions)
 #print(psf_positions_filtered)
 
 
-display_psf_loaded = DisplayDataFramePSFsLocalization( video_dra, psf_positions,  0.1, False)
-display_psf_loaded.show_psf(display_history=False)
+#isplay_psf_loaded = DisplayDataFramePSFsLocalization( video_dra, psf_positions,  0.1, False)
+#display_psf_loaded.show_psf(display_history=False)
 
 
 
