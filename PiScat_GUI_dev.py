@@ -240,8 +240,14 @@ def window_layout():
                     [sg.Button('Find Optimal Batch Size')]],vertical_alignment='top')]
     ]
 
+    after_dra = [
+        [sg.Column([[sg.Checkbox('Temporal Median Filter', key ='-TMPMED-', enable_events = True)],
+                    [sg.Checkbox('Flat Field Filter', key ='-FLTFIELD-', enable_events = True)]], vertical_alignment='top'),
+         sg.Column([[sg.Button('Apply Filter(s)')]])]
+    ]
+
     piscat_preprocessing = [
-        [sg.Column(power_normalization_df_correction, vertical_alignment='top'), sg.VerticalSeparator(), sg.Column(DRA, vertical_alignment='top')],
+        [sg.Column(power_normalization_df_correction, vertical_alignment='top'), sg.VerticalSeparator(), sg.Column(DRA, vertical_alignment='top'), sg.VerticalSeparator(), sg.Column(after_dra, vertical_alignment='top')],
         [sg.Canvas(key='-PNCANV-', pad=(0,0), size=(1000,520))]    
     ]
 
@@ -449,6 +455,7 @@ im3 = None
 batchSize_in = None
 detected_psfs = None
 show_psf = None
+linked_PSFs_filter = None
 
 
 #%%#######################--------MAIN--------###########################
@@ -701,6 +708,8 @@ while True:
                     if values['-SHOW_PSF-'] == True:
                         if detected_psfs is not None:
                             show_psf = detected_psfs[['frame','y','x','sigma','center_intensity']].to_numpy()
+                            if linked_PSFs_filter is not None:
+                                show_psf = linked_PSFs_filter[['frame','y','x','sigma','center_intensity']].to_numpy()
                         else:
                             print(f'No PSFs detected yet. Pls load Data or process the Video')
                             window['-SHOW_PSF-'].update(False)
@@ -863,6 +872,19 @@ while True:
         else:
             print(f'Please select a video first')
 
+    elif event == 'Apply Filter(s)':
+        if video_dra is not None:
+            pre_filters = Filters(video = video_dra)
+            if values['-TMPMED-'] == True:
+                video_dra = pre_filters.temporal_median()
+            if values['-FLTFIELD-'] == True:
+                video_dra = pre_filters.flat_field(sigma = 1.1)
+        else:
+            print(f'DRA filtered video is not yet in memory! Please process or load first!')
+            window['-PSFPV-'].update(False)
+            continue
+
+
     elif values['-PSFPV-'] == True:
         window['-PLAY OPTION-'].update("Enable Video Player: NO")
 
@@ -915,7 +937,7 @@ while True:
             else:
                 # Update the image data on subsequent frames
                 ax.set_title(f'Frame Number {frame_index + 1}')
-                update_figure(frame, im, colorbar, psf_positions=psf_preview, radius=8)
+                update_figure(frame, im, colorbar, psf_positions=psf_preview, frame_number = frame_index, radius=8)
 
             canvas = draw_figure(window['-CANVAS-'], fig, canvas)
             
@@ -1031,12 +1053,11 @@ while True:
             plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
             plt.title('Linking', fontsize=18)
             print('Median of linking length is {}'.format(np.median(his_all_particles)))
+            plt.figure(fig3.number)
             plt.show()
 
         else:
             print(f'Temporal filtering was not conducted yet')
-
-    
 
 
 window.close()
