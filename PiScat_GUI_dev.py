@@ -17,7 +17,8 @@ from piscat.Preproccessing import *
 from piscat.BackgroundCorrection import *
 from piscat.InputOutput import *
 from piscat.Localization import *
-
+from piscat.Trajectory import temporal_filtering
+from piscat.Trajectory import particle_linking
 
 
 #%%##################--------FUNCTIONS--------########################
@@ -276,24 +277,33 @@ def window_layout():
         [sg.Frame('2D Gauss Fit',[
          [sg.Checkbox('2D-Gaussian Fit', key='-2DGAUSS-', default=True)],
          [sg.Checkbox('FRST Localization Improvement', key='-FRST-', default=True)],
-         [sg.Text('ROI Scale'),sg.Push(),sg.Slider(range=(1,20), size=(20,10), resolution=1, default_value=5, orientation='h', key='-GAUSSSCALE-', enable_events=True)]],
+         [sg.Text('ROI Scale'),sg.Push(),sg.Slider(range=(1,20), size=(20,10), resolution=1, default_value=5, orientation='h', key='-GAUSSSCALE-', enable_events=True)],
+         [sg.Push(), sg.Button('Apply Gauss Fit'), sg.Push()]],
          expand_x=True, expand_y=True)],
         [sg.Frame('Spatial Filtering', [
          [sg.Checkbox('Outlier Frames', key='-OUTLIER-', default=True)],
          [sg.Text('Threshold Outlier'), sg.Push(), sg.Slider(range=(1,50), size=(20,10), resolution=1, default_value=25, orientation='h', key='-THRESHOUT-', enable_events=True) ],
          [sg.Checkbox('Dense_PSFs', key='-DENSEPSF-', default=True)],
-         [sg.Text('Threshold Dense PSFs'), sg.Push(), sg.Slider(range=(0,1), size=(20,10), resolution=0.1, default_value=0, orientation='h', key='-THRESDENSE-', enable_events=True) ],
+         [sg.Text('Threshold Dense PSFs'), sg.Push(), sg.Slider(range=(0,1), size=(20,10), resolution=0.1, default_value=0, orientation='h', key='-THRESHDENSE-', enable_events=True) ],
          [sg.Checkbox('Symmetric PSFs', key='-SYMMETRICPSF-', default=True)],
          [sg.Text('Threshold Symmetric PSFs'), sg.Push(), sg.Slider(range=(0,1), size=(20,10), resolution=0.1, default_value=0.7, orientation='h', key='-THRESHSYM-', enable_events=True) ],
          [sg.Checkbox('Remove Side Lobes', key='-SIDELOBES-', default=True)],
-         [sg.Text('Threshold Side Lobes'), sg.Push(), sg.Slider(range=(0,1), size=(20,10), resolution=0.1, default_value=0, orientation='h', key='-THRESHSIDELOBES-', enable_events=True) ]
+         [sg.Text('Threshold Side Lobes'), sg.Push(), sg.Slider(range=(0,1), size=(20,10), resolution=0.1, default_value=0, orientation='h', key='-THRESHSIDELOBES-', enable_events=True) ],
+         [sg.Push(), sg.Button('Apply Spatial Filters'), sg.Push()]
          ], expand_x=True, expand_y=True)],
-        [sg.Push(), sg.Button('Apply Filters'), sg.Push()]
     ]
 
+    psf_filtering_column2 = [
+        [sg.Frame('Temporal Filtering',[
+         [sg.Text('Min Threshold'),sg.Push(),sg.Slider(range=(1,50), size=(20,10), resolution=1, default_value=5, orientation='h', key='-TEMPMIN-', enable_events=True)],
+         [sg.Text('Max Threshold'),sg.Push(),sg.Slider(range=(1,300), size=(20,10), resolution=1, default_value=30, orientation='h', key='-TEMPMAX-', enable_events=True)],
+         [sg.Push(), sg.Button('Apply Temporal Filters'), sg.Button('Show Histogram'), sg.Push()]],
+         expand_x=True, expand_y=True)],
+
+    ]
 
     psf_filtering = [
-        [sg.Column(psf_filtering_column1, vertical_alignment='top')]
+        [sg.Column(psf_filtering_column1, vertical_alignment='top'), sg.Column(psf_filtering_column2, vertical_alignment='top', expand_x=True)]
     ]
 
     tab_layout = [
@@ -434,6 +444,7 @@ colorbar = None
 im = None
 im2 = None
 im3 = None
+batchSize_in = None
 
 
 #%%#######################--------MAIN--------###########################
@@ -484,6 +495,7 @@ while True:
 
                 delete_CPU_config()
                 cpu_settings = CPUConfigurations(n_jobs=n_jobs, verbose=verbose, backend=backend, parallel_active=parallel_active, flag_report=cpu_set_flag)
+                cpu_window.close()
 
 #---------------------------------------------------------
     # Open Window for adjusting the scale of the canvas 
@@ -759,7 +771,6 @@ while True:
             if values['-DFC-'] == True:
                 mean_dark_frame = np.mean(dark_frame_video)
                 video_dfc = np.subtract(video_data, mean_dark_frame)
-                print(video_dfc)
                 # checkbox for powernormalization of darkframe corrected video
                 if values['-PN-'] == True:
                     video_pn, power_fluctuation = Normalization(video_dfc).power_normalized()
@@ -946,17 +957,60 @@ while True:
             window['-PSFPV-'].update(False)
             continue
     
-    elif event == 'Apply Filters':
-        if detected_psfs is not None:    
-            
-            filters = SpatialFilter()
+    elif event == 'Apply Gauss Fit':
+        if detected_psfs is not None:
+
+            gaussscale = int(values['-GAUSSSCALE-'])
 
             if values['-2DGAUSS-']== True:
-                detected_psfs = PSFs.fit_Gaussian2D_wrapper()
+                detected_psfs = PSFs.fit_Gaussian2D_wrapper(detected_psfs, scale = gaussscale, internal_parallel_flag = parallel_active)
+            if values['-FRST-'] == True:
+                detected_psfs = PSFs.improve_localization_with_frst(detected_psfs, scale = gaussscale)
 
         else:
             print(f'No PSFs detected yet. Pls load Data or process the Video')
 
+    elif event == 'Apply Spatial Filters':
+        if detected_psfs is not None:    
+            
+            filters = SpatialFilter()
+
+            threshout = int(values['-THRESHOUT-'])
+            threshdense = float(values['-THRESHDENSE-'])
+            threshsym = float(values['-THRESHSYM-'])
+            threshsidelobes = float(values['-THRESHSIDELOBES-'])
+
+            if values['-OUTLIER-'] == True:
+                detected_psfs = filters.outlier_frames(detected_psfs, threshold = threshout)
+            if values['-DENSEPSF-'] == True:
+                detected_psfs = filters.dense_PSFs(detected_psfs, threshold = threshdense)
+            if values['-SYMMETRICPSF-'] == True:
+                detected_psfs = filters.symmetric_PSFs(detected_psfs, threshold = threshsym)
+            if values['-SIDELOBES-'] == True:
+                detected_psfs = filters.remove_side_lobes_artifact(detected_psfs, threshold = threshsidelobes)
+
+        else:
+            print(f'No PSFs detected yet. Pls load Data or process the Video')
+
+    elif event == 'Apply Temporal Filters':
+        if detected_psfs is not None:
+
+            linking = particle_linking.Linking()
+            linked_psfs = linking.create_link(psf_position=detected_psfs, search_range = 2, memory = 10)
+
+            t_filters = temporal_filtering.TemporalFilter(video = video_dra, batchSize = batchSize_in)
+
+            temp_thresh_min = int(values['-TEMPMIN-'])
+            temp_thresh_max = int(values['-TEMPMAX-'])
+
+            all_trajectories, linked_PSFs_filter, his_all_particles = t_filters.v_trajectory(df_PSFs = linked_psfs,
+                                                                                              threshold_min = temp_thresh_min,
+                                                                                              threshold_max = temp_thresh_max)
+
+            print(all_trajectories)
+            print(linked_PSFs_filter)
+        else:
+            print(f'No PSFs detected yet. Pls load Data or process the Video')
     
 
 
