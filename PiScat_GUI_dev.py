@@ -45,7 +45,7 @@ def draw_figure_plot(canvas_elem, figure):
     canvas.draw()
     canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-def update_figure(image_data, im, colorbar, psf_positions=None, radius=8):
+def update_figure(image_data, im, colorbar, psf_positions=None, frame_number=None, radius=8):
 
     # Clear previous circles if any
     for artist in im.axes.artists:
@@ -58,8 +58,10 @@ def update_figure(image_data, im, colorbar, psf_positions=None, radius=8):
     if colorbar:
         colorbar.update_normal(im)
 
-    if psf_positions is not None:
-        create_red_circles(psf_positions, im.axes, radius=radius)
+    if psf_positions is not None and frame_number is not None:
+        # Filter PSF positions for the current frame
+        current_frame_psf = psf_positions[psf_positions[:, 0] == frame_number]
+        create_red_circles(current_frame_psf, im.axes, radius=radius)
 
     im.axes.figure.canvas.draw_idle()
 
@@ -445,6 +447,8 @@ im = None
 im2 = None
 im3 = None
 batchSize_in = None
+detected_psfs = None
+show_psf = None
 
 
 #%%#######################--------MAIN--------###########################
@@ -694,18 +698,18 @@ while True:
                     frame = frame/np.max(frame)
                     vid_len = video_dra.shape[0]
                     window['-FRNR-'].update(range=(1, vid_len) ,disabled=False)
+                    if values['-SHOW_PSF-'] == True:
+                        if detected_psfs is not None:
+                            show_psf = detected_psfs[['frame','y','x','sigma','center_intensity']].to_numpy()
+                        else:
+                            print(f'No PSFs detected yet. Pls load Data or process the Video')
+                            window['-SHOW_PSF-'].update(False)
+                            continue 
             else:
                 frame = video_data[frame_index, :, :]
                 frame = frame/np.max(frame)
                 vid_len = video_data.shape[0]
                 window['-FRNR-'].update(range=(1, vid_len) ,disabled=False)
-
-
-            if values['-SHOW_PSF-'] == True:
-                if video_dra is None:
-                    print(f'Filtered video is not yet in memory! Please process first!')
-                    window['-FILTVID-'].update(False) 
-                    continue
 
 
             # reset the frame_index advancement
@@ -734,7 +738,10 @@ while True:
             if playing:
                 frame_index = (frame_index + 1) % vid_len
                 window['-FRNR-'].update(frame_index + 1)
-                
+
+
+            [p.remove() for p in reversed(ax.patches)]
+
             if im is None:
                 # If it's the first frame, create the image and colorbar
                 im = ax.imshow(frame, cmap='viridis')
@@ -744,15 +751,15 @@ while True:
                 colorbar.ax.tick_params(labelsize=5)
                 fig.tight_layout()
             else:
-                # Update the image data on subsequent frames
-                ax.set_title(f'Frame Number {frame_index + 1}')
-                update_figure(frame, im, colorbar)
-                    
+                if values['-SHOW_PSF-'] == True:
+                    # Update the image data on subsequent frames
+                    ax.set_title(f'Frame Number {frame_index + 1}')
+                    update_figure(frame, im, colorbar, psf_positions = show_psf, frame_number = frame_index, radius=8)
+                else:
+                    ax.set_title(f'Frame Number {frame_index + 1}')
+                    update_figure(frame, im, colorbar)    
             # Draw or update the figure on the canvas
-            canvas = draw_figure(window['-CANVAS-'], fig, canvas)
-            [p.remove() for p in reversed(ax.patches)]  
-
-
+            canvas = draw_figure(window['-CANVAS-'], fig, canvas)  
 
         else:
             print(f'No video for playing in memory')
@@ -1011,6 +1018,24 @@ while True:
             print(linked_PSFs_filter)
         else:
             print(f'No PSFs detected yet. Pls load Data or process the Video')
+    
+    elif event == 'Show Histogram':
+        if his_all_particles is not None:
+            his_all_particles = linked_psfs['particle'].value_counts()
+
+            fig3 = plt.figure(figsize=(12, 4))
+
+            plt.hist(his_all_particles, bins=50, fc='C1', ec='k', density=False)
+            plt.ylabel('#Counts', fontsize=18)
+            plt.xlabel('Length of linking', fontsize=18)
+            plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+            plt.title('Linking', fontsize=18)
+            print('Median of linking length is {}'.format(np.median(his_all_particles)))
+            plt.show()
+
+        else:
+            print(f'Temporal filtering was not conducted yet')
+
     
 
 
