@@ -169,6 +169,32 @@ def save_video_in_path(video_data ,input_filepath, output_folder, suffix):
 
     print(f'{suffix} video has been saved as {output_filepath}')
 
+def save_dataframe_to_hdf5(df, input_filepath, directory, suffix, key='df'):
+    """
+    Save a pandas DataFrame to an HDF5 file with a file name based on the directory and suffix.
+
+    Parameters:
+    - df: pandas DataFrame to be saved.
+    - directory: The directory where the HDF5 file will be saved.
+    - suffix: The suffix to append to the file name (before the .h5 extension).
+    - key: The key under which the DataFrame is stored in the HDF5 file (default 'df').
+
+    The final file path will be 'directory/suffix.h5'.
+    """
+    # Ensure the directory exists
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    # Create the full file path with suffix
+    og_filename = os.path.basename(input_filepath)
+    filename_without_ext, _ = os.path.splitext(og_filename)
+    file_path = os.path.join(directory, f'{filename_without_ext}_{suffix}.h5')
+    
+    # Save the DataFrame to the HDF5 file
+    df.to_hdf(file_path, key=key, mode='w')
+    
+    print(f"DataFrame saved to {file_path}")
+
 
 # Load the last selected folder path
 folder, full_path_dark, saving_folder, PSF_folder = load_file_paths()
@@ -410,7 +436,7 @@ def Loading_layout():
     load_layout = [
         [sg.Push(),sg.Text('Choose a video to load'), sg.Push()],
         [sg.Push(),sg.Input(key='-LOADING_FILE-', enable_events=True), sg.FileBrowse(),sg.Push()], 
-        [sg.Push(),sg.Button('Load as PN Video'), sg.Button('Load as DRA Video'),sg.Push()]
+        [sg.Push(),sg.Button('Load as PN Video'), sg.Button('Load as DRA Video'), sg.Button('Load PSFs Data'),sg.Push()]
     ]
 
     loading_window = sg.Window('Load processed Data', load_layout, resizable=True, finalize=True)
@@ -456,6 +482,7 @@ batchSize_in = None
 detected_psfs = None
 show_psf = None
 linked_PSFs_filter = None
+loading_file = None
 
 
 #%%#######################--------MAIN--------###########################
@@ -585,9 +612,24 @@ while True:
                     else:
                         print(f'There is no DRA Filtered Video in the Memory')
                     pass
+            
+            elif event4 == "Save PSF Data":
+                if full_path is not None:
+                    input_path = full_path
+                else: 
+                    input_path = loading_file
+                
+                if detected_psfs is not None:
+                    save_dataframe_to_hdf5(detected_psfs, input_path, saving_folder, suffix = 'detected_PSFs')
+
+                elif linked_PSFs_filter is not None:
+                    save_dataframe_to_hdf5(linked_PSFs_filter, input_path, saving_folder, suffix = 'detected_PSFs')
+                
+                else: 
+                    print(f'No PSFs detected yet. Pls load Data or process the Video')
 
 #---------------------------------------------------------
-    # Open Window for Saving Data
+    # Open Window for Loading Data
     if event == 'Load':
         loading_window = Loading_layout()
 
@@ -613,6 +655,11 @@ while True:
                 vid_len = video_dra.shape[0]
                 frame_index = 0
                 window['-FRNR-'].update(range=(1, vid_len) ,disabled=False)
+                loading_window.close()
+
+            elif event5 == 'Load PSFs Data':
+                detected_psfs = pandas.read_hdf(value5['-LOADING_FILE-'], key='df')
+                print(f'Loaded {loading_file} as PSFs Data Frame')
                 loading_window.close()
 
 #---------------------------------------------------------
@@ -1061,5 +1108,3 @@ while True:
 
 
 window.close()
-cpu_window.close()
-scaling_window.close()
