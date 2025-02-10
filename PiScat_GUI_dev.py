@@ -718,7 +718,7 @@ while True:
             full_path_dark = os.path.join(folder, selected_file_dark)
             save_file_paths(folder, full_path_dark, saving_folder, PSF_folder)
             dark_frame_video = np.load(full_path_dark)
-            print(f'Loaded {full_path_dark} as darkframe video')
+            print(f'Loaded {full_path_dark} as darkframe video')    
         else:
             print(f'File could not be loaded: {full_path_dark}')
 
@@ -741,7 +741,7 @@ while True:
             # checkbox for differential view
             if values['-DIFF-'] == True:
                 frame = differential_view(video_data, frame_index, batchSize)
-                frame = frame/np.max(frame)
+                # frame = frame/np.max(frame)
             elif values['-FILTVID-'] == True:
                 if video_dra is None:
                     print(f'Filtered video is not yet in memory! Please process first!')
@@ -749,7 +749,7 @@ while True:
                     continue
                 else:
                     frame = video_dra[frame_index, :, :]
-                    frame = frame/np.max(frame)
+                    #frame = frame/np.max(frame)
                     vid_len = video_dra.shape[0]
                     window['-FRNR-'].update(range=(1, vid_len) ,disabled=False)
                     if values['-SHOW_PSF-'] == True:
@@ -763,7 +763,7 @@ while True:
                             continue 
             else:
                 frame = video_data[frame_index, :, :]
-                frame = frame/np.max(frame)
+                #frame = frame/np.max(frame)
                 vid_len = video_data.shape[0]
                 window['-FRNR-'].update(range=(1, vid_len) ,disabled=False)
 

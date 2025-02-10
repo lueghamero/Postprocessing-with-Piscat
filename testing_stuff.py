@@ -17,47 +17,36 @@ import cv2
 from PSF_localization_preview_copy import *
 
 
-#filename = sg.popup_get_file('Filename to play')
-#filename = r"C:\Users\Emanuel\Desktop\Masterarbeit\2024_02_27_data\12_59_32_Sample1_Refrence_Air.npy"
-filename = r"C:\Users\Dante\Desktop\Processed_iScat_Vids/15_35_12_Au_3mul_15042024_DRA_filtered.npy"
-#if filename is None:
-#    exit()
-#My version of extracting folder in which data is stored and name of data:
-filename_folder = os.path.dirname(filename)
-filename_measurement = os.path.splitext(os.path.basename(filename))[0]
+def window_layout():
 
-video_data = np.load(filename, allow_pickle=True)
-video_dra = video_data[:,:,:]
-#video_data = np.transpose(video_data, (1, 2, 0))
+    layout = [
+        [sg.Text('Piezo Voltage (mV)')],
+        [sg.Input(default_text='0', size=(10), key='Volt_IN', enable_events=True)],
+        [sg.Button('-1mV'), sg.Button('+1mV')]
+    ]
 
-#video_pn, power_fluctuation = Normalization(video=video_data).power_normalized()
+    window = sg.Window('Piezo Voltage Manager', layout, resizable=True, finalize=True)
+    
+    return window
 
-#video_dr = DifferentialRollingAverage(video=video_pn, batchSize=30, mode_FPN='fFPN')
-#video_dra, _ = video_dr.differential_rolling(FPN_flag=True, select_correction_axis='Both', FFT_flag=True)
+window = window_layout()
 
-# Assume 'video' is your video array and has shape (num_frames, height, width)
-n = np.shape(video_dra)[0]
+voltage = 0
+while True:
 
-frame_number = list(range(1, n))
-PSFs = PSFsExtraction(video_dra)
+    # reads the input values of the GUI
+    event, values = window.read(timeout=100)
+    
+    if event == sg.WINDOW_CLOSED:
+        break
 
+    if event == '-1mV':
+        voltage -= 1
+        window['Volt_IN'].update(voltage)
 
-# Detect PSFs in the frame
-psf_positions = PSFs.psf_detection( function='dog', min_sigma=2.5, max_sigma=6, sigma_ratio=1.1, threshold= 0.0042, overlap = 0)
-#psf_positions_filtered = SpatialFilter().remove_side_lobes_artifact(psf_positions)
-#psf_positions_filtered = SpatialFilter().dense_PSFs(psf_positions_filtered)
+    elif event == '+1mV':
+        voltage += 1
+        window['Volt_IN'].update(voltage)
+        print(voltage)
 
-print(psf_positions)
-#print(psf_positions_filtered)
-
-
-#isplay_psf_loaded = DisplayDataFramePSFsLocalization( video_dra, psf_positions,  0.1, False)
-#display_psf_loaded.show_psf(display_history=False)
-
-
-
-
-#PSFshow = PSF.psf_detection_preview(function='dog', min_sigma=1, max_sigma=8, sigma_ratio=1.5, threshold=0.00008, overlap=0, mode='BOTH', frame_number=100, IntSlider_width='400px')
-
-
-
+window.close()
